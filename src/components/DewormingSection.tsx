@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Deworming, Member } from "@/lib/types";
-import { deleteDeworming, saveDeworming } from "@/lib/data";
+import { deleteDeworming, listDewormings, listMembers, saveDeworming } from "@/lib/data";
 import { ageInMonths, formatAge, formatDate, today } from "@/lib/date";
-import { DEWORM_MEDICINES, DEWORM_META, dewormStatus, suggestedDose } from "@/lib/deworming";
+import { DEWORM_MEDICINES, DEWORM_META, DEWORM_START_MONTHS, dewormStatus, suggestedDose } from "@/lib/deworming";
 import { confirmDelete, ErrorText, Field, Modal } from "./ui";
 
 export function DewormingSection({
@@ -90,6 +90,32 @@ function DewormForm({ member, value, canEdit, onDone }: { member: Member; value:
   const [f, setF] = useState<Partial<Deworming>>(value);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [others, setOthers] = useState<Member[]>([]);
+  const [familyRecords, setFamilyRecords] = useState<Deworming[]>([]);
+  const [copyTo, setCopyTo] = useState<Set<string>>(new Set());
+
+  // Thành viên khác trong gia đình để sao chép lần xổ giun
+  useEffect(() => {
+    if (!canEdit) return;
+    Promise.all([listMembers(member.family_id), listDewormings({ familyId: member.family_id }).catch(() => [] as Deworming[])])
+      .then(([ms, ds]) => {
+        setOthers(ms.filter((m) => m.id !== member.id));
+        setFamilyRecords(ds);
+      })
+      .catch(() => {});
+  }, [member.id, member.family_id, canEdit]);
+
+  const date = f.given_on || today();
+  const eligible = (m: Member) => ageInMonths(m.birth_date, date) >= DEWORM_START_MONTHS;
+  const already = (m: Member) => familyRecords.some((d) => d.member_id === m.id && d.given_on === date);
+  const selectable = others.filter((m) => eligible(m) && !already(m));
+  const toggle = (id: string) =>
+    setCopyTo((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,6 +130,15 @@ function DewormForm({ member, value, canEdit, onDone }: { member: Member; value:
         medicine: f.medicine,
         notes: f.notes,
       });
+      for (const m of selectable.filter((m) => copyTo.has(m.id))) {
+        await saveDeworming({
+          family_id: m.family_id,
+          member_id: m.id,
+          given_on: f.given_on,
+          medicine: f.medicine,
+          notes: f.notes,
+        });
+      }
       onDone();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -136,6 +171,37 @@ function DewormForm({ member, value, canEdit, onDone }: { member: Member; value:
         <Field label="Ghi chú">
           <input className="input" value={f.notes ?? ""} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="VD: xổ giun ở trường" />
         </Field>
+        {others.length > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="label mb-0">{f.id ? "Sao chép sang thành viên khác" : "Cả nhà cùng uống? Ghi luôn cho"}</span>
+              {selectable.length > 1 && (
+                <button
+                  type="button"
+                  className="text-sm text-primary underline"
+                  onClick={() => setCopyTo(copyTo.size === selectable.length ? new Set() : new Set(selectable.map((m) => m.id)))}
+                >
+                  {copyTo.size === selectable.length ? "Bỏ chọn" : "Chọn tất cả"}
+                </button>
+              )}
+            </div>
+            <div className="divide-y divide-border rounded-xl border border-border">
+              {others.map((m) => {
+                const ok = eligible(m) && !already(m);
+                const age = ageInMonths(m.birth_date, date);
+                return (
+                  <label key={m.id} className={`flex items-center gap-3 px-3 py-2 text-sm ${ok ? "cursor-pointer" : "opacity-50"}`}>
+                    <input type="checkbox" className="h-4 w-4" disabled={!ok} checked={ok && copyTo.has(m.id)} onChange={() => toggle(m.id)} />
+                    <span className="flex-1">{m.full_name}</span>
+                    <span className="text-xs text-muted">
+                      {!eligible(m) ? "Dưới 12 tháng" : already(m) ? "Đã ghi ngày này" : age < 24 ? "12–23 tháng: ½ liều" : formatAge(m.birth_date, date)}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </fieldset>
       <ErrorText error={error} />
       {canEdit && (
@@ -148,7 +214,7 @@ function DewormForm({ member, value, canEdit, onDone }: { member: Member; value:
             <span />
           )}
           <button className="btn btn-primary" disabled={busy}>
-            {busy ? "Đang lưu…" : "Lưu"}
+            {busy ? "Đang lưu…" : copyTo.size ? `Lưu (${1 + selectable.filter((m) => copyTo.has(m.id)).length} người)` : "Lưu"}
           </button>
         </div>
       )}
