@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useFamily } from "@/components/FamilyProvider";
-import { Avatar, Empty, ErrorText, Spinner } from "@/components/ui";
+import { ScanVaccines } from "@/components/ScanVaccines";
+import { Avatar, Empty, ErrorText, Field, Modal, Spinner } from "@/components/ui";
 import { byMember, useFamilyData } from "@/lib/hooks";
 import { buildSchedule, STATUS_META } from "@/lib/vaccines";
-import { daysBetween, formatDate, today } from "@/lib/date";
+import { daysBetween, formatAge, formatDate, today } from "@/lib/date";
 
 export default function VaccinesPage() {
   return (
@@ -17,8 +18,11 @@ export default function VaccinesPage() {
 }
 
 function FamilyVaccines() {
-  const { family } = useFamily();
-  const { data, error } = useFamilyData(family?.id);
+  const { family, canEdit } = useFamily();
+  const { data, error, reload } = useFamilyData(family?.id);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanMemberId, setScanMemberId] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
 
   const items = useMemo(() => {
     if (!data) return [];
@@ -35,12 +39,30 @@ function FamilyVaccines() {
   if (error) return <ErrorText error={error} />;
   if (!data) return <Spinner />;
 
+  const scanMember = data.members.find((m) => m.id === scanMemberId);
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Lịch tiêm cả nhà</h1>
-        <p className="text-sm text-text-2">Các mũi quá hạn, đến hạn và trong 4 tháng tới</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Lịch tiêm cả nhà</h1>
+          <p className="text-sm text-text-2">Các mũi quá hạn, đến hạn và trong 4 tháng tới</p>
+        </div>
+        {canEdit && data.members.length > 0 && (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setScanMemberId(data.members.length === 1 ? data.members[0].id : "");
+              setScanOpen(true);
+            }}
+          >
+            ✨ Quét sổ tiêm bằng AI
+          </button>
+        )}
       </div>
+
+      {notice && <p className="rounded-lg bg-[var(--good-soft)] px-3 py-2 text-sm text-good">{notice}</p>}
+
       {items.length === 0 ? (
         <Empty title="Không có mũi tiêm nào sắp tới">Mọi người đã tiêm đủ theo lịch hoặc chưa có thành viên nào.</Empty>
       ) : (
@@ -67,6 +89,33 @@ function FamilyVaccines() {
           })}
         </div>
       )}
+
+      <Modal open={scanOpen} title="Quét sổ tiêm bằng AI" onClose={() => setScanOpen(false)} wide>
+        <div className="space-y-4">
+          <Field label="Sổ tiêm của ai?">
+            <select className="input" value={scanMemberId} onChange={(e) => setScanMemberId(e.target.value)}>
+              <option value="">— Chọn thành viên —</option>
+              {data.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.full_name} ({formatAge(m.birth_date)})
+                </option>
+              ))}
+            </select>
+          </Field>
+          {scanMember && (
+            <ScanVaccines
+              key={scanMember.id}
+              member={scanMember}
+              existing={byMember(data.vaccinations, scanMember.id)}
+              onDone={(n) => {
+                setScanOpen(false);
+                setNotice(`Đã lưu ${n} mũi tiêm cho ${scanMember.full_name}. Xem chi tiết trong trang của thành viên.`);
+                reload();
+              }}
+            />
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
