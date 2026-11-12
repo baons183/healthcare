@@ -8,7 +8,7 @@ import { Attachments } from "./Attachments";
 import { ScanVaccines } from "./ScanVaccines";
 import { confirmDelete, ErrorText, Field, Modal } from "./ui";
 
-type Filter = "todo" | "all" | "done";
+type Filter = "todo" | "all" | "done" | "upcoming" | "due" | "overdue";
 
 export function VaccinesTab({
   member,
@@ -29,25 +29,42 @@ export function VaccinesTab({
   const [notice, setNotice] = useState<string | null>(null);
 
   const schedule = useMemo(() => buildSchedule(member.birth_date, vaccinations), [member.birth_date, vaccinations]);
+  // "Sắp tới" = các mũi đến hạn trong 12 tháng tới (để danh sách gọn)
+  const horizon = addYear(today());
+  const isSoon = (d: ScheduledDose) => d.status === "upcoming" && d.dueDate <= horizon;
+  const shown = schedule.filter((d) => showService || d.vaccine.program !== "service" || d.status === "done");
   const counts = useMemo(() => {
     const c: Record<DoseStatus, number> = { done: 0, due: 0, overdue: 0, upcoming: 0, expired: 0, unknown: 0 };
-    schedule.forEach((d) => c[d.status]++);
+    shown.forEach((d) => (d.status !== "upcoming" || isSoon(d)) && c[d.status]++);
     return c;
-  }, [schedule]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule, showService]);
 
-  const visible = schedule.filter((d) => {
-    if (!showService && d.vaccine.program === "service" && d.status !== "done") return false;
-    if (filter === "todo") return d.status === "overdue" || d.status === "due" || d.status === "upcoming";
-    if (filter === "done") return d.status === "done";
-    return true;
+  const visible = shown.filter((d) => {
+    switch (filter) {
+      case "todo":
+        return d.status === "overdue" || d.status === "due" || isSoon(d);
+      case "upcoming":
+        return isSoon(d);
+      case "due":
+      case "overdue":
+      case "done":
+        return d.status === filter;
+      default:
+        return true;
+    }
   });
-  // Cần làm: chỉ hiện các mốc sắp tới gần nhất (12 tháng) để danh sách gọn
-  const limited =
-    filter === "todo"
-      ? visible.filter((d) => d.status !== "upcoming" || d.dueDate <= addYear(today()))
-      : visible;
 
-  const groups = groupByAge(limited);
+  // "Cần tiêm": hiện mũi đến hạn & sắp tới trước, quá hạn (thường là chưa ghi nhận) sau
+  const sections: [string | null, ScheduledDose[]][] =
+    filter === "todo"
+      ? [
+          ["Đến hạn & sắp tới (12 tháng)", visible.filter((d) => d.status !== "overdue")],
+          ["Quá hạn – chưa ghi nhận", visible.filter((d) => d.status === "overdue")],
+        ]
+      : [[null, visible]];
+  const empty = visible.length === 0;
+  const toggle = (f: Filter) => setFilter((cur) => (cur === f ? "todo" : f));
   const others = vaccinations.filter((v) => !v.vaccine_code);
 
   const record = (d: ScheduledDose) =>
@@ -62,11 +79,17 @@ export function VaccinesTab({
 
   return (
     <div className="space-y-5">
-      <section className="grid grid-cols-3 gap-2">
-        <Count label="Đã tiêm" value={counts.done} cls="text-good" />
-        <Count label="Đến hạn" value={counts.due} cls="text-warning" />
-        <Count label="Quá hạn" value={counts.overdue} cls="text-danger" />
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Count label="Đã tiêm" value={counts.done} cls="text-good" active={filter === "done"} onClick={() => toggle("done")} />
+        <Count label="Sắp tới (12 tháng)" value={counts.upcoming} cls="text-info" active={filter === "upcoming"} onClick={() => toggle("upcoming")} />
+        <Count label="Đến hạn" value={counts.due} cls="text-warning" active={filter === "due"} onClick={() => toggle("due")} />
+        <Count label="Quá hạn" value={counts.overdue} cls="text-danger" active={filter === "overdue"} onClick={() => toggle("overdue")} />
       </section>
+      {counts.overdue > 5 && counts.done === 0 && (
+        <p className="rounded-lg bg-[var(--info-soft)] px-3 py-2 text-sm text-info">
+          Nhiều mũi đang “quá hạn” vì chưa có dữ liệu. Nếu bé đã tiêm đủ, hãy dùng <b>Quét sổ tiêm bằng AI</b> để nhập nhanh từ sổ.
+        </p>
+      )}
 
       {notice && <p className="rounded-lg bg-[var(--good-soft)] px-3 py-2 text-sm text-good">{notice}</p>}
 
@@ -112,22 +135,29 @@ export function VaccinesTab({
           Hiện vắc xin dịch vụ (ngoài chương trình TCMR)
         </label>
 
-        {groups.length === 0 ? (
+        {empty ? (
           <p className="card p-6 text-center text-sm text-text-2">
-            {filter === "todo" ? "Không có mũi nào cần tiêm trong 12 tháng tới. 🎉" : "Không có mục nào."}
+            {filter === "todo" || filter === "upcoming" ? "Không có mũi nào cần tiêm trong 12 tháng tới. 🎉" : "Không có mục nào."}
           </p>
         ) : (
-          <div className="space-y-4">
-            {groups.map(([label, doses]) => (
-              <div key={label}>
-                <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
-                <div className="card divide-y divide-border">
-                  {doses.map((d, i) => (
-                    <DoseRow key={`${d.vaccine.code}-${d.doseIndex}-${i}`} d={d} canEdit={canEdit} onClick={() => record(d)} />
+          <div className="space-y-6">
+            {sections.map(([title, doses]) =>
+              doses.length === 0 ? null : (
+                <div key={title ?? "all"} className="space-y-4">
+                  {title && <h4 className="text-base font-bold">{title} <span className="font-normal text-muted">· {doses.length}</span></h4>}
+                  {groupByAge(doses).map(([label, ds]) => (
+                    <div key={label}>
+                      <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
+                      <div className="card divide-y divide-border">
+                        {ds.map((d, i) => (
+                          <DoseRow key={`${d.vaccine.code}-${d.doseIndex}-${i}`} d={d} canEdit={canEdit} onClick={() => record(d)} />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         )}
       </section>
@@ -212,12 +242,29 @@ function groupByAge(doses: ScheduledDose[]): [string, ScheduledDose[]][] {
   return [...map.entries()];
 }
 
-function Count({ label, value, cls }: { label: string; value: number; cls: string }) {
+function Count({
+  label,
+  value,
+  cls,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  cls: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="card p-3 text-center">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`card p-3 text-center transition hover:border-primary ${active ? "border-primary ring-2 ring-[var(--primary-soft)]" : ""}`}
+    >
       <p className={`tabular text-2xl font-bold ${value ? cls : "text-muted"}`}>{value}</p>
       <p className="text-xs text-text-2">{label}</p>
-    </div>
+    </button>
   );
 }
 
