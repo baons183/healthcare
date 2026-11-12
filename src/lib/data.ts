@@ -5,7 +5,16 @@
  */
 import { supabase } from "./supabase/client";
 import {
+  EMPTY_EXTRAS,
   normalizeMeasurement,
+  normalizeNumeric,
+  type Checkup,
+  type Medication,
+  type MemberExtras,
+  type Milestone,
+  type Pregnancy,
+  type Temperature,
+  type Vital,
   type Deworming,
   type DocumentFile,
   type Illness,
@@ -17,7 +26,19 @@ import {
 import { compressImage } from "./image";
 import { isEmail, toE164 } from "./phone";
 
-type Table = "members" | "measurements" | "illnesses" | "vaccinations" | "documents" | "dewormings";
+type Table =
+  | "members"
+  | "measurements"
+  | "illnesses"
+  | "vaccinations"
+  | "documents"
+  | "dewormings"
+  | "medications"
+  | "temperatures"
+  | "milestones"
+  | "checkups"
+  | "vitals"
+  | "pregnancies";
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -94,6 +115,67 @@ export async function listDewormings(by: { memberId?: string; familyId?: string 
 }
 export const saveDeworming = (m: Partial<Deworming>) => upsert<Deworming>("dewormings", m);
 export const deleteDeworming = (id: string) => remove("dewormings", id);
+
+// ---------- Bảng bổ sung (migration 0005): thuốc, nhiệt độ, mốc phát triển, khám, chỉ số, thai kỳ
+const normTemp = (r: Record<string, unknown>) => normalizeNumeric<Temperature>(r, ["temp_c"]);
+const normVital = (r: Record<string, unknown>) =>
+  normalizeNumeric<Vital>(r, ["systolic", "diastolic", "pulse", "glucose", "cholesterol", "ldl", "hdl", "triglycerides"]);
+const normPreg = (r: Record<string, unknown>) => normalizeNumeric<Pregnancy>(r, ["pre_weight_kg"]);
+
+async function listBy<T>(table: Table, by: { memberId?: string; familyId?: string }, order: string, ascending = true): Promise<T[]> {
+  let q = supabase().from(table).select("*").order(order, { ascending });
+  if (by.memberId) q = q.eq("member_id", by.memberId);
+  if (by.familyId) q = q.eq("family_id", by.familyId);
+  return check(await q) as T[];
+}
+
+/** Tải tất cả bảng bổ sung. Bảng chưa tạo (chưa chạy 0005) trả về rỗng. */
+export async function listExtras(by: { memberId?: string; familyId?: string }): Promise<MemberExtras> {
+  const safe = <T,>(p: Promise<T[]>) => p.catch(() => [] as T[]);
+  const [medications, temperatures, milestones, checkups, vitals, pregnancies] = await Promise.all([
+    safe(listBy<Medication>("medications", by, "start_on", false)),
+    safe(listBy<Record<string, unknown>>("temperatures", by, "measured_at")).then((r) => r.map(normTemp)),
+    safe(listBy<Milestone>("milestones", by, "achieved_on")),
+    safe(listBy<Checkup>("checkups", by, "done_on", false)),
+    safe(listBy<Record<string, unknown>>("vitals", by, "measured_at")).then((r) => r.map(normVital)),
+    safe(listBy<Record<string, unknown>>("pregnancies", by, "lmp", false)).then((r) => r.map(normPreg)),
+  ]);
+  return { ...EMPTY_EXTRAS, medications, temperatures, milestones, checkups, vitals, pregnancies };
+}
+
+const MIGRATION_HINT = "Chưa tạo bảng dữ liệu mới – hãy chạy file SQL 0005_health_features.sql trong Supabase.";
+async function save<T extends { id?: string }>(table: Table, row: Partial<T>): Promise<T> {
+  try {
+    return await upsert<T>(table, row);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes(`"${table}"`) || msg.includes(`public.${table}`) || /schema cache/.test(msg)) throw new Error(MIGRATION_HINT);
+    throw e;
+  }
+}
+
+export const saveMedication = (m: Partial<Medication>) => save<Medication>("medications", m);
+export const deleteMedication = (id: string) => remove("medications", id);
+export const saveTemperature = async (m: Partial<Temperature>) =>
+  normTemp((await save<Temperature>("temperatures", m)) as unknown as Record<string, unknown>);
+export const deleteTemperature = (id: string) => remove("temperatures", id);
+export const saveMilestone = (m: Partial<Milestone>) => save<Milestone>("milestones", m);
+export const deleteMilestone = (id: string) => remove("milestones", id);
+export const saveCheckup = (m: Partial<Checkup>) => save<Checkup>("checkups", m);
+export const deleteCheckup = (id: string) => remove("checkups", id);
+export const saveVital = async (m: Partial<Vital>) => normVital((await save<Vital>("vitals", m)) as unknown as Record<string, unknown>);
+export const deleteVital = (id: string) => remove("vitals", id);
+export const savePregnancy = async (m: Partial<Pregnancy>) =>
+  normPreg((await save<Pregnancy>("pregnancies", m)) as unknown as Record<string, unknown>);
+export const deletePregnancy = (id: string) => remove("pregnancies", id);
+
+/** Bật/tắt link thẻ khẩn cấp công khai (QR). Trả về token mới hoặc null. */
+export async function setEmergencyLink(memberId: string, enabled: boolean): Promise<string | null> {
+  const token = enabled ? crypto.randomUUID() : null;
+  const res = await supabase().from("members").update({ emergency_token: token }).eq("id", memberId);
+  if (res.error) throw new Error(/emergency_token/.test(res.error.message) ? MIGRATION_HINT : res.error.message);
+  return token;
+}
 
 // ---------- Documents (ảnh giấy tờ)
 const BUCKET = "documents";
@@ -179,13 +261,14 @@ export async function removeFamilyUser(fid: string, userId: string) {
 
 /** Xuất toàn bộ dữ liệu gia đình ra JSON (sao lưu) */
 export async function exportFamily(fid: string) {
-  const [members, measurements, illnesses, vaccinations, dewormings, documents] = await Promise.all([
+  const [members, measurements, illnesses, vaccinations, dewormings, extras, documents] = await Promise.all([
     listMembers(fid),
     listMeasurements({ familyId: fid }),
     listIllnesses({ familyId: fid }),
     listVaccinations({ familyId: fid }),
     listDewormings({ familyId: fid }).catch(() => []),
+    listExtras({ familyId: fid }),
     check(await supabase().from("documents").select("*").eq("family_id", fid)),
   ]);
-  return { exported_at: new Date().toISOString(), members, measurements, illnesses, vaccinations, dewormings, documents };
+  return { exported_at: new Date().toISOString(), members, measurements, illnesses, vaccinations, dewormings, ...extras, documents };
 }

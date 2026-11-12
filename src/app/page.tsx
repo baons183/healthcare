@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { useFamily } from "@/components/FamilyProvider";
 import { MemberForm } from "@/components/MemberForm";
 import { Avatar, Empty, ErrorText, LevelIcon, Modal, Spinner } from "@/components/ui";
-import { byMember, useFamilyData } from "@/lib/hooks";
+import { byMember, extrasOf, useFamilyData } from "@/lib/hooks";
 import { recommendationsFor } from "@/lib/recommendations";
 import { formatAge, formatDate } from "@/lib/date";
 import { bmi } from "@/lib/growth";
@@ -29,7 +29,7 @@ function Dashboard() {
     if (!data) return [];
     return data.members.map((m) => {
       const ms = byMember(data.measurements, m.id);
-      const recs = recommendationsFor(m, ms, byMember(data.vaccinations, m.id), byMember(data.illnesses, m.id), byMember(data.dewormings, m.id));
+      const recs = recommendationsFor(m, ms, byMember(data.vaccinations, m.id), byMember(data.illnesses, m.id), byMember(data.dewormings, m.id), extrasOf(data.extras, m.id));
       const lastH = [...ms].reverse().find((x) => x.height_cm)?.height_cm ?? null;
       const lastW = [...ms].reverse().find((x) => x.weight_kg)?.weight_kg ?? null;
       const lastDate = ms[ms.length - 1]?.measured_on;

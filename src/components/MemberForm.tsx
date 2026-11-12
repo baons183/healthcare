@@ -40,6 +40,10 @@ export function MemberForm({
         chronic_conditions: f.chronic_conditions,
         notes: f.notes,
         color: f.color,
+        // cột mới (migration 0005) – chỉ gửi khi có giá trị để không lỗi nếu chưa chạy SQL
+        ...(f.emergency_contact || member?.emergency_contact ? { emergency_contact: f.emergency_contact } : {}),
+        ...(f.emergency_phone || member?.emergency_phone ? { emergency_phone: f.emergency_phone } : {}),
+        ...(f.insurance_number || member?.insurance_number ? { insurance_number: f.insurance_number } : {}),
       });
       onSaved(saved);
     } catch (err) {
@@ -96,6 +100,20 @@ export function MemberForm({
       <Field label="Bệnh nền / mãn tính">
         <input className="input" value={f.chronic_conditions ?? ""} onChange={(e) => set("chronic_conditions", e.target.value)} />
       </Field>
+      <fieldset className="space-y-3 rounded-xl border border-border p-3">
+        <legend className="px-1 text-sm font-bold">🆘 Thông tin khẩn cấp</legend>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Người liên hệ">
+            <input className="input" value={f.emergency_contact ?? ""} placeholder="VD: Mẹ – Lan" onChange={(e) => set("emergency_contact", e.target.value)} />
+          </Field>
+          <Field label="SĐT liên hệ">
+            <input className="input" type="tel" inputMode="tel" value={f.emergency_phone ?? ""} onChange={(e) => set("emergency_phone", e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Số thẻ BHYT">
+          <input className="input" value={f.insurance_number ?? ""} onChange={(e) => set("insurance_number", e.target.value)} />
+        </Field>
+      </fieldset>
       <Field label="Ghi chú">
         <textarea className="input" rows={2} value={f.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
       </Field>

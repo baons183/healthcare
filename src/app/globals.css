@@ -27,6 +27,7 @@
   --chart-band: #eef4ec;
   --chart-grid: #ecebe7;
   --chart-series: #2a78d6;
+  --chart-series-2: #d9561f;
   color-scheme: light;
 }
 
@@ -54,6 +55,7 @@
     --chart-band: #1c2a20;
     --chart-grid: #2a2a2e;
     --chart-series: #3987e5;
+    --chart-series-2: #f08a5d;
     color-scheme: dark;
   }
 }
@@ -80,6 +82,7 @@
   --chart-band: #1c2a20;
   --chart-grid: #2a2a2e;
   --chart-series: #3987e5;
+  --chart-series-2: #f08a5d;
   color-scheme: dark;
 }
 
@@ -193,4 +196,51 @@ body {
   .badge-info { background: var(--info-soft); color: var(--info); }
   .badge-muted { background: var(--surface-2); color: var(--muted); }
   .tabular { font-variant-numeric: tabular-nums; }
+}
+
+/* In / Lưu PDF */
+@media print {
+  :root,
+  :root:not([data-theme="light"]),
+  :root[data-theme="dark"] {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f4f4f2;
+    --border: #d9d8d3;
+    --text: #000000;
+    --text-2: #333333;
+    --muted: #666666;
+    --chart-grid: #e6e6e3;
+    --chart-band: #eef4ec;
+    --chart-ref: #a9a8ae;
+    --chart-ref-strong: #6f6e75;
+    color-scheme: light;
+  }
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .print-break {
+    break-before: page;
+  }
+  .card,
+  section,
+  tr {
+    break-inside: avoid;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

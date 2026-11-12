@@ -65,3 +65,34 @@ export function formatAgeMonths(months: number): string {
   }
   return `${months / 12} tuổi`;
 }
+
+export function addDays(date: string, days: number): string {
+  return toISODate(new Date(parseDate(date).getTime() + days * DAY));
+}
+
+/** Ngày & phút hiện tại theo giờ Việt Nam (UTC+7) – dùng trên server (Vercel chạy UTC) */
+export function vnNow(at: Date = new Date()): { date: string; minutes: number; month: string } {
+  const d = new Date(at.getTime() + 7 * 3600_000);
+  const date = d.toISOString().slice(0, 10);
+  return { date, minutes: d.getUTCHours() * 60 + d.getUTCMinutes(), month: date.slice(0, 7) };
+}
+
+/** "08:30" -> 510 */
+export function hhmmToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/** ISO timestamp -> "dd/mm HH:MM" theo giờ máy */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** Giá trị cho <input type="datetime-local"> từ ISO (giờ máy) */
+export function toLocalInput(iso: string = new Date().toISOString()): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}

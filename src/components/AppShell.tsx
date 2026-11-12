@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen pb-20 sm:pb-8">
-      <header className="sticky top-0 z-30 border-b border-border bg-[var(--surface)]/90 backdrop-blur">
+      <header className="no-print sticky top-0 z-30 border-b border-border bg-[var(--surface)]/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
           <Link href="/" className="flex items-center gap-2 font-bold">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className="mx-auto max-w-5xl px-4 py-5">{loading ? <Spinner /> : family ? children : <Spinner label="Đang khởi tạo gia đình…" />}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface sm:hidden">
+      <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface sm:hidden">
         {NAV.map((n) => (
           <Link
             key={n.href}

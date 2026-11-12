@@ -1,5 +1,10 @@
 /** Tổng hợp khuyến cáo cho từng thành viên từ số đo, lịch tiêm, bệnh sử. */
-import type { Deworming, Illness, Measurement, Member, Vaccination } from "./types";
+import { EMPTY_EXTRAS, type Deworming, type Illness, type Measurement, type Member, type MemberExtras, type Vaccination } from "./types";
+import { CHECKUP_META, applicableKinds, checkupStatus, intervalLabel } from "./checkups";
+import { feverAlerts } from "./fever";
+import { DOMAIN_META, lateMilestones } from "./milestones";
+import { activePregnancy, expectedGainAt, gestationalAge, tetanusInPregnancy, visitSchedule } from "./pregnancy";
+import { latestVitalGrades } from "./vitals";
 import { dewormStatus } from "./deworming";
 import { ADULT_MONTHS, assessMeasurement, INDICATORS, measureIntervalMonths, zScore, type Level } from "./growth";
 import { buildSchedule, isSoon, SOON_DAYS } from "./vaccines";
@@ -9,7 +14,7 @@ export interface Recommendation {
   level: Level;
   title: string;
   detail?: string;
-  tab?: "growth" | "vaccines" | "illness" | "profile";
+  tab?: "growth" | "vaccines" | "illness" | "profile" | "development" | "checkups";
 }
 
 export function recommendationsFor(
@@ -18,6 +23,7 @@ export function recommendationsFor(
   vaccinations: Vaccination[],
   illnesses: Illness[],
   dewormings: Deworming[] = [],
+  extras: MemberExtras = EMPTY_EXTRAS,
 ): Recommendation[] {
   const recs: Recommendation[] = [];
   const age = ageInMonths(member.birth_date);
@@ -147,9 +153,75 @@ export function recommendationsFor(
     });
   }
 
-  // ---- Khám định kỳ người lớn
-  if (age >= 216 && !last) {
-    recs.push({ level: "info", title: "Khám sức khỏe định kỳ", detail: "Người trưởng thành nên khám sức khỏe tổng quát ít nhất 1 lần/năm.", tab: "growth" });
+  // ---- Sốt
+  for (const a of feverAlerts(extras.temperatures, age)) recs.push({ ...a, tab: "illness" });
+
+  // ---- Mốc phát triển
+  const late = lateMilestones(member.birth_date, extras.milestones);
+  if (late.length) {
+    recs.push({
+      level: "warning",
+      title: `${late.length} mốc phát triển chưa ghi nhận`,
+      detail:
+        summarize(late.map((i) => `${DOMAIN_META[i.spec.domain].label.toLowerCase()}: ${i.spec.label.toLowerCase()}`), 3) +
+        ". Nếu trẻ đã làm được, hãy đánh dấu; nếu chưa, nên trao đổi với bác sĩ nhi.",
+      tab: "development",
+    });
+  }
+
+  // ---- Khám định kỳ (răng, mắt, tổng quát)
+  for (const kind of applicableKinds(member.birth_date)) {
+    const st = checkupStatus(kind, member.birth_date, extras.checkups);
+    if (!st) continue;
+    const name = CHECKUP_META[kind].label;
+    if (st.state === "nodata") {
+      recs.push({ level: "info", title: `Chưa có lịch sử ${name.toLowerCase()}`, detail: `Nên ${name.toLowerCase()} ${intervalLabel(st.intervalMonths)}. Ghi lại lần gần nhất để app nhắc lịch.`, tab: "checkups" });
+    } else if (st.state === "due" || st.state === "overdue") {
+      recs.push({
+        level: "warning",
+        title: `${st.state === "overdue" ? "Quá hạn" : "Đến hạn"} ${name.toLowerCase()}`,
+        detail: `Lần gần nhất ${formatDate(st.last!.done_on)}, nên khám ${intervalLabel(st.intervalMonths)} (hạn ${formatDate(st.nextDate)}).`,
+        tab: "checkups",
+      });
+    } else if (st.soon) {
+      recs.push({ level: "info", title: `Sắp đến lịch ${name.toLowerCase()}`, detail: `Ngày ${formatDate(st.nextDate)}.`, tab: "checkups" });
+    }
+  }
+
+  // ---- Huyết áp, đường huyết, mỡ máu
+  for (const g of latestVitalGrades(extras.vitals, member.gender)) {
+    if (g.grade.level === "good") continue;
+    recs.push({ level: g.grade.level, title: `${g.title}: ${g.grade.label}`, detail: `${g.value} (đo ${formatDate(g.at)}). Đo lại vài lần; nếu vẫn bất thường hãy đi khám.`, tab: "checkups" });
+  }
+
+  // ---- Thai kỳ
+  const preg = activePregnancy(extras.pregnancies);
+  if (preg) {
+    const ga = gestationalAge(preg.lmp);
+    recs.push({ level: "info", title: `Đang mang thai tuần ${ga.weeks}${ga.days ? ` + ${ga.days} ngày` : ""}`, detail: `Dự sinh ${formatDate(preg.due_date)}.`, tab: "checkups" });
+    for (const v of visitSchedule(preg, extras.checkups)) {
+      if (v.status === "current") recs.push({ level: "warning", title: `Đến lịch: ${v.visit.title}`, detail: `Từ ${formatDate(v.start)} đến ${formatDate(v.end)}. ${v.visit.detail}`, tab: "checkups" });
+      else if (v.soon) recs.push({ level: "info", title: `Sắp tới: ${v.visit.title}`, detail: `Từ ${formatDate(v.start)}.`, tab: "checkups" });
+    }
+    if (ga.weeks >= 20 && tetanusInPregnancy(preg, vaccinations).length === 0) {
+      recs.push({ level: "warning", title: "Chưa ghi nhận mũi uốn ván thai kỳ", detail: "Bà mẹ mang thai cần tiêm uốn ván để phòng uốn ván sơ sinh. Nếu đã tiêm, hãy ghi lại.", tab: "checkups" });
+    }
+    const pre = preg.pre_weight_kg;
+    const lastH = [...sorted].reverse().find((x) => x.height_cm)?.height_cm;
+    const lastW = sorted.filter((x) => x.weight_kg && x.measured_on >= preg.lmp).at(-1);
+    if (pre && lastH && lastW?.weight_kg) {
+      const wk = gestationalAge(preg.lmp, lastW.measured_on).weeks;
+      const [lo, hi] = expectedGainAt(wk, pre / (lastH / 100) ** 2);
+      const gain = Math.round((lastW.weight_kg - pre) * 10) / 10;
+      if (gain < lo - 1 || gain > hi + 1) {
+        recs.push({
+          level: "info",
+          title: gain < lo ? "Tăng cân thai kỳ chậm" : "Tăng cân thai kỳ nhanh",
+          detail: `Tuần ${wk}: tăng ${gain} kg, khoảng khuyến nghị ${lo}–${hi} kg. Trao đổi chế độ ăn với bác sĩ.`,
+          tab: "checkups",
+        });
+      }
+    }
   }
 
   const order: Record<Level, number> = { danger: 0, warning: 1, info: 2, good: 3 };

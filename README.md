@@ -6,6 +6,11 @@
 - **Tiêm chủng**: lịch tiêm theo **TCMR Việt Nam** + vắc xin dịch vụ; trạng thái đã tiêm / đến hạn / quá hạn; **chụp ảnh sổ tiêm, phiếu tiêm** lưu trên cloud.
 - **Bệnh sử**: mỗi lần ốm/khám: triệu chứng, chẩn đoán, thuốc, nơi khám, ảnh đơn thuốc/xét nghiệm.
 - **Khuyến cáo tự động**: đến lúc đo lại, tụt kênh tăng trưởng, sụt cân, mũi tiêm quá hạn, bệnh kéo dài…
+- **Phát triển**: mốc vận động (WHO), ngôn ngữ – xã hội (CDC) cho trẻ dưới 6 tuổi, cảnh báo trễ mốc.
+- **Ốm & thuốc**: nhật ký sốt có biểu đồ và cảnh báo; thuốc đang dùng với **nhắc giờ uống thuốc**.
+- **Khám định kỳ**: khám răng, mắt, tổng quát; người lớn: huyết áp, đường huyết, mỡ máu; **thai kỳ** (tuần thai, lịch khám thai, uốn ván, tăng cân).
+- **Thẻ y tế khẩn cấp** + mã QR (xem không cần đăng nhập), ảnh hình nền màn hình khóa; **xuất PDF** hồ sơ cho bác sĩ.
+- **Thông báo**: đẩy trên điện thoại + email (tùy chọn). Đăng nhập email, SĐT, **Google**.
 - **Chia sẻ**: mời vợ/chồng/ông bà cùng quản lý (quyền sửa hoặc chỉ xem). Xuất dữ liệu JSON để sao lưu.
 
 ## Công nghệ (đều miễn phí)
@@ -32,6 +37,17 @@
 5. Chạy tiếp [`supabase/migrations/0002_phone_auth.sql`](supabase/migrations/0002_phone_auth.sql) (đăng nhập/mời bằng số điện thoại).
 6. Mã OTP qua email: **Authentication → Emails → Magic Link**, thêm `{{ .Token }}` vào nội dung email.
 7. (Tùy chọn) Đăng nhập bằng SĐT: **Authentication → Sign In / Providers → Phone** → bật, chọn Twilio. SMS tính phí theo tin.
+
+8. Chạy tiếp [`0003_deworming.sql`](supabase/migrations/0003_deworming.sql), [`0004_notifications.sql`](supabase/migrations/0004_notifications.sql), [`0005_health_features.sql`](supabase/migrations/0005_health_features.sql).
+9. Nhắc giờ uống thuốc: mở [`0006_medication_cron.sql`](supabase/migrations/0006_medication_cron.sql), thay tên miền và `CRON_SECRET`, rồi chạy (cron mỗi 15 phút của Supabase gọi `/api/cron/frequent`).
+
+### Đăng nhập Google (miễn phí)
+1. <https://console.cloud.google.com> → tạo project → **APIs & Services → OAuth consent screen** (External, điền tên app, email).
+2. **Credentials → Create credentials → OAuth client ID** → *Web application*. *Authorized redirect URIs*: `https://<project>.supabase.co/auth/v1/callback`.
+3. Supabase → **Authentication → Sign In / Providers → Google** → bật, dán *Client ID* và *Client Secret*.
+
+### Email nhắc lịch (tùy chọn)
+Dùng Gmail: bật xác minh 2 bước → tạo **Mật khẩu ứng dụng** tại <https://myaccount.google.com/apppasswords>. Trên Vercel thêm `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER` (địa chỉ Gmail), `SMTP_PASS` (mật khẩu ứng dụng, bật *Sensitive*). Người dùng bật “Gửi thêm qua email” trong Cài đặt → Thông báo.
 
 ### Quét sổ tiêm bằng AI
 Cần `ANTHROPIC_API_KEY` (tạo tại <https://platform.claude.com> → Settings → API keys). Đặt trong `.env.local` và trên Vercel (bật *Sensitive*, **không** có tiền tố `NEXT_PUBLIC_`). Chi phí ước tính ~0,05–0,1 USD/ảnh.

@@ -20,6 +20,10 @@ export interface Member {
   chronic_conditions: string | null;
   notes: string | null;
   color: string | null;
+  emergency_contact?: string | null;
+  emergency_phone?: string | null;
+  insurance_number?: string | null;
+  emergency_token?: string | null;
 }
 
 export interface Measurement {
@@ -72,6 +76,109 @@ export interface Deworming {
   given_on: string;
   medicine: string | null;
   notes: string | null;
+}
+
+export interface Medication {
+  id: string;
+  family_id: string;
+  member_id: string;
+  illness_id: string | null;
+  name: string;
+  dosage: string | null;
+  times: string[]; // "HH:MM" giờ Việt Nam
+  start_on: string;
+  end_on: string | null;
+  remind: boolean;
+  notes: string | null;
+}
+
+export interface Temperature {
+  id: string;
+  family_id: string;
+  member_id: string;
+  illness_id: string | null;
+  measured_at: string; // ISO timestamp
+  temp_c: number;
+  site: string | null;
+  medicine: string | null;
+  notes: string | null;
+}
+
+export interface Milestone {
+  id: string;
+  family_id: string;
+  member_id: string;
+  code: string;
+  achieved_on: string;
+  notes: string | null;
+}
+
+export type CheckupKind = "dental" | "eye" | "general" | "prenatal";
+
+export interface Checkup {
+  id: string;
+  family_id: string;
+  member_id: string;
+  kind: CheckupKind;
+  done_on: string;
+  pregnancy_id: string | null;
+  visit_code: string | null;
+  facility: string | null;
+  result: string | null;
+  notes: string | null;
+}
+
+export type GlucoseContext = "fasting" | "after_meal" | "random";
+
+export interface Vital {
+  id: string;
+  family_id: string;
+  member_id: string;
+  measured_at: string;
+  systolic: number | null;
+  diastolic: number | null;
+  pulse: number | null;
+  glucose: number | null;
+  glucose_context: GlucoseContext | null;
+  cholesterol: number | null;
+  ldl: number | null;
+  hdl: number | null;
+  triglycerides: number | null;
+  notes: string | null;
+}
+
+export interface Pregnancy {
+  id: string;
+  family_id: string;
+  member_id: string;
+  lmp: string;
+  due_date: string;
+  pre_weight_kg: number | null;
+  ended_on: string | null;
+  outcome: string | null;
+  notes: string | null;
+}
+
+/** Dữ liệu bổ sung của 1 thành viên (các bảng thêm ở migration 0005) */
+export interface MemberExtras {
+  medications: Medication[];
+  temperatures: Temperature[];
+  milestones: Milestone[];
+  checkups: Checkup[];
+  vitals: Vital[];
+  pregnancies: Pregnancy[];
+}
+
+export const EMPTY_EXTRAS: MemberExtras = { medications: [], temperatures: [], milestones: [], checkups: [], vitals: [], pregnancies: [] };
+
+/** Supabase trả numeric dưới dạng string – chuẩn hóa về number */
+function num(v: unknown): number | null {
+  return v === null || v === undefined || v === "" ? null : Number(v);
+}
+export function normalizeNumeric<T>(row: Record<string, unknown>, keys: string[]): T {
+  const out: Record<string, unknown> = { ...row };
+  for (const k of keys) out[k] = num(row[k]);
+  return out as T;
 }
 
 export type RefType ="general" | "vaccination" | "illness" | "measurement";

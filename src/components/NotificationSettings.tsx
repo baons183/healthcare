@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { ErrorText } from "./ui";
 
-type Prefs = { notify_measure: boolean; notify_vaccine: boolean; notify_overdue: boolean };
-const DEFAULT: Prefs = { notify_measure: true, notify_vaccine: true, notify_overdue: true };
+type Prefs = { notify_measure: boolean; notify_vaccine: boolean; notify_overdue: boolean; notify_medication: boolean; notify_email: boolean };
+const DEFAULT: Prefs = { notify_measure: true, notify_vaccine: true, notify_overdue: true, notify_medication: true, notify_email: false };
 
 function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -43,7 +43,7 @@ export function NotificationSettings({ userId }: { userId: string }) {
       setSubscribed(!!sub && Notification.permission === "granted");
     }
     const { data } = await supabase().from("notification_settings").select("*").eq("user_id", userId).maybeSingle();
-    if (data) setPrefs({ notify_measure: data.notify_measure, notify_vaccine: data.notify_vaccine, notify_overdue: data.notify_overdue });
+    if (data) setPrefs({ ...DEFAULT, ...Object.fromEntries(Object.keys(DEFAULT).filter((k) => k in data).map((k) => [k, data[k]])) } as Prefs);
   }, [userId]);
 
   useEffect(() => {
@@ -124,7 +124,13 @@ export function NotificationSettings({ userId }: { userId: string }) {
     run(async () => {
       const next = { ...prefs, [k]: !prefs[k] };
       setPrefs(next);
-      await savePrefs(next);
+      try {
+        await savePrefs(next);
+      } catch (e) {
+        setPrefs(prefs);
+        const m = e instanceof Error ? e.message : String(e);
+        throw new Error(/notify_(medication|email)/.test(m) ? "Chưa cập nhật database – hãy chạy file SQL 0005_health_features.sql." : m);
+      }
     });
 
   const test = () =>
@@ -132,13 +138,16 @@ export function NotificationSettings({ userId }: { userId: string }) {
       const res = await fetch("/api/push/test", { method: "POST" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? `Lỗi ${res.status}`);
-      setMsg(j.previews ? `Đã gửi thử + ${j.previews} thông báo xem trước của hôm nay.` : "Đã gửi thử. Hôm nay chưa có lịch nào cần nhắc.");
+      const where = [j.devices ? `${j.devices} thiết bị` : "", j.email ? `email ${j.email}` : ""].filter(Boolean).join(" và ");
+      setMsg(`Đã gửi thử tới ${where}. ` + (j.previews ? `Kèm ${j.previews} nhắc lịch xem trước của hôm nay.` : "Hôm nay chưa có lịch nào cần nhắc."));
     });
 
   const OPTIONS: [keyof Prefs, string, string][] = [
-    ["notify_measure", "Nhắc cân đo hàng tháng", "Khi một thành viên chưa đo chiều cao, cân nặng hơn 1 tháng"],
-    ["notify_vaccine", "Lịch tiêm & xổ giun sắp tới", "Báo trước 15 ngày và nhắc lại 1 ngày trước"],
+    ["notify_measure", "Nhắc cân đo", "Theo độ tuổi: < 1 tuổi hằng tháng, 1–2 tuổi 3 tháng/lần, 2–6 tuổi 6 tháng/lần, lớn hơn 1 năm/lần"],
+    ["notify_vaccine", "Lịch tiêm, xổ giun & khám sắp tới", "Báo trước 15 ngày và nhắc lại 1 ngày trước (gồm khám răng, mắt, khám thai)"],
     ["notify_overdue", "Tổng hợp mũi quá hạn", "Vào ngày 1 hàng tháng"],
+    ["notify_medication", "Nhắc giờ uống thuốc", "Đúng giờ đã đặt trong mục Thuốc (chỉ thông báo trên thiết bị)"],
+    ["notify_email", "Gửi thêm qua email", "Gộp các nhắc lịch trong ngày thành 1 email lúc 8h sáng"],
   ];
 
   return (
@@ -148,21 +157,23 @@ export function NotificationSettings({ userId }: { userId: string }) {
           <h2 className="font-bold">🔔 Thông báo</h2>
           <p className="text-xs text-muted">Gửi khoảng 8h sáng mỗi ngày khi có lịch cần nhắc</p>
         </div>
-        {support.ok &&
-          (subscribed ? (
-            <div className="flex gap-2">
-              <button className="btn btn-sm" onClick={test} disabled={busy}>
-                Gửi thử
-              </button>
+        <div className="flex flex-wrap gap-2">
+          {(subscribed || prefs.notify_email) && (
+            <button className="btn btn-sm" onClick={test} disabled={busy}>
+              Gửi thử
+            </button>
+          )}
+          {support.ok &&
+            (subscribed ? (
               <button className="btn btn-sm btn-danger" onClick={disable} disabled={busy}>
                 Tắt
               </button>
-            </div>
-          ) : (
-            <button className="btn btn-primary" onClick={enable} disabled={busy}>
-              {busy ? "Đang bật…" : "Bật thông báo"}
-            </button>
-          ))}
+            ) : (
+              <button className="btn btn-primary" onClick={enable} disabled={busy}>
+                {busy ? "Đang bật…" : "Bật thông báo"}
+              </button>
+            ))}
+        </div>
       </div>
       {!support.ok && support.reason && <p className="rounded-lg bg-[var(--info-soft)] px-3 py-2 text-sm text-info">{support.reason}</p>}
       <ul className="divide-y divide-border">

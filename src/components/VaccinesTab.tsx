@@ -65,7 +65,7 @@ export function VaccinesTab({
       : [[null, visible]];
   const empty = visible.length === 0;
   const toggle = (f: Filter) => setFilter((cur) => (cur === f ? "todo" : f));
-  const others = vaccinations.filter((v) => !v.vaccine_code);
+  const others = vaccinations.filter((v) => !v.vaccine_code || !VACCINE_BY_CODE[v.vaccine_code]);
 
   const record = (d: ScheduledDose) =>
     setEditing(
