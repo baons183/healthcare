@@ -18,8 +18,9 @@ export interface PushPayload {
 let vapidReady = false;
 function ensureVapid() {
   if (vapidReady) return;
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
+  const clean = (v?: string) => (v ?? "").trim().replace(/^["']+|["']+$/g, "");
+  const pub = clean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+  const priv = clean(process.env.VAPID_PRIVATE_KEY);
   if (!pub || !priv) throw new Error("Chưa cấu hình VAPID keys (NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY).");
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@example.com", pub, priv);
   vapidReady = true;

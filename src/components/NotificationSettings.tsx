@@ -65,15 +65,29 @@ export function NotificationSettings({ userId }: { userId: string }) {
 
   const enable = () =>
     run(async () => {
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      // Bỏ khoảng trắng / dấu ngoặc kép lỡ dán thừa khi cấu hình trên Vercel
+      const key = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "").trim().replace(/^["']+|["']+$/g, "");
       if (!key) throw new Error("Chưa cấu hình NEXT_PUBLIC_VAPID_PUBLIC_KEY trên server.");
+      let bytes: Uint8Array;
+      try {
+        bytes = b64ToBytes(key);
+      } catch {
+        throw new Error(`NEXT_PUBLIC_VAPID_PUBLIC_KEY có ký tự không hợp lệ (bắt đầu bằng "${key.slice(0, 6)}…").`);
+      }
+      if (bytes.length !== 65 || bytes[0] !== 4) {
+        throw new Error(
+          `NEXT_PUBLIC_VAPID_PUBLIC_KEY sai: dài ${key.length} ký tự (cần 87, bắt đầu bằng "B").` +
+            (key.length === 43 ? " Có vẻ bạn đã dán nhầm VAPID_PRIVATE_KEY." : "") +
+            " Sửa trên Vercel rồi Redeploy.",
+        );
+      }
       const perm = await Notification.requestPermission();
       if (perm !== "granted") throw new Error("Bạn chưa cho phép thông báo. Hãy bật lại trong cài đặt trình duyệt/điện thoại.");
       const reg = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
       const sub =
         (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) }));
+        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes as Uint8Array<ArrayBuffer> }));
       const j = sub.toJSON();
       const { error } = await supabase()
         .from("push_subscriptions")
