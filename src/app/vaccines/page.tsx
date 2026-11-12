@@ -6,8 +6,8 @@ import { useFamily } from "@/components/FamilyProvider";
 import { ScanVaccines } from "@/components/ScanVaccines";
 import { Avatar, Empty, ErrorText, Field, Modal, Spinner } from "@/components/ui";
 import { byMember, useFamilyData } from "@/lib/hooks";
-import { buildSchedule, STATUS_META } from "@/lib/vaccines";
-import { daysBetween, formatAge, formatDate, today } from "@/lib/date";
+import { buildSchedule, isSoon, SOON_DAYS, STATUS_META } from "@/lib/vaccines";
+import { formatAge, formatDate } from "@/lib/date";
 
 export default function VaccinesPage() {
   return (
@@ -26,11 +26,10 @@ function FamilyVaccines() {
 
   const items = useMemo(() => {
     if (!data) return [];
-    const horizon = 120; // 4 tháng tới (ngày)
     return data.members
       .flatMap((m) =>
         buildSchedule(m.birth_date, byMember(data.vaccinations, m.id))
-          .filter((d) => d.status === "overdue" || d.status === "due" || (d.status === "upcoming" && daysBetween(today(), d.dueDate) <= horizon))
+          .filter((d) => d.status === "overdue" || d.status === "due" || isSoon(d))
           .map((d) => ({ ...d, member: m })),
       )
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
@@ -46,7 +45,7 @@ function FamilyVaccines() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Lịch tiêm cả nhà</h1>
-          <p className="text-sm text-text-2">Các mũi quá hạn, đến hạn và trong 4 tháng tới</p>
+          <p className="text-sm text-text-2">Các mũi quá hạn, đến hạn và sắp tới trong {SOON_DAYS} ngày</p>
         </div>
         {canEdit && data.members.length > 0 && (
           <button

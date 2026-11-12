@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { Member, Vaccination } from "@/lib/types";
 import { deleteVaccination, saveVaccination } from "@/lib/data";
 import { formatAgeMonths, formatDate, today } from "@/lib/date";
-import { buildSchedule, STATUS_META, VACCINE_BY_CODE, VACCINES, type DoseStatus, type ScheduledDose } from "@/lib/vaccines";
+import { buildSchedule, isSoon, SOON_DAYS, STATUS_META, VACCINE_BY_CODE, VACCINES, type DoseStatus, type ScheduledDose } from "@/lib/vaccines";
 import { Attachments } from "./Attachments";
 import { ScanVaccines } from "./ScanVaccines";
 import { confirmDelete, ErrorText, Field, Modal } from "./ui";
@@ -29,9 +29,6 @@ export function VaccinesTab({
   const [notice, setNotice] = useState<string | null>(null);
 
   const schedule = useMemo(() => buildSchedule(member.birth_date, vaccinations), [member.birth_date, vaccinations]);
-  // "Sắp tới" = các mũi đến hạn trong 12 tháng tới (để danh sách gọn)
-  const horizon = addYear(today());
-  const isSoon = (d: ScheduledDose) => d.status === "upcoming" && d.dueDate <= horizon;
   const shown = schedule.filter((d) => showService || d.vaccine.program !== "service" || d.status === "done");
   const counts = useMemo(() => {
     const c: Record<DoseStatus, number> = { done: 0, due: 0, overdue: 0, upcoming: 0, expired: 0, unknown: 0 };
@@ -59,7 +56,7 @@ export function VaccinesTab({
   const sections: [string | null, ScheduledDose[]][] =
     filter === "todo"
       ? [
-          ["Đến hạn & sắp tới (12 tháng)", visible.filter((d) => d.status !== "overdue")],
+          [`Đến hạn & sắp tới (${SOON_DAYS} ngày)`, visible.filter((d) => d.status !== "overdue")],
           ["Quá hạn – chưa ghi nhận", visible.filter((d) => d.status === "overdue")],
         ]
       : [[null, visible]];
@@ -81,7 +78,7 @@ export function VaccinesTab({
     <div className="space-y-5">
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Count label="Đã tiêm" value={counts.done} cls="text-good" active={filter === "done"} onClick={() => toggle("done")} />
-        <Count label="Sắp tới (12 tháng)" value={counts.upcoming} cls="text-info" active={filter === "upcoming"} onClick={() => toggle("upcoming")} />
+        <Count label={`Sắp tới (${SOON_DAYS} ngày)`} value={counts.upcoming} cls="text-info" active={filter === "upcoming"} onClick={() => toggle("upcoming")} />
         <Count label="Đến hạn" value={counts.due} cls="text-warning" active={filter === "due"} onClick={() => toggle("due")} />
         <Count label="Quá hạn" value={counts.overdue} cls="text-danger" active={filter === "overdue"} onClick={() => toggle("overdue")} />
       </section>
@@ -137,7 +134,7 @@ export function VaccinesTab({
 
         {empty ? (
           <p className="card p-6 text-center text-sm text-text-2">
-            {filter === "todo" || filter === "upcoming" ? "Không có mũi nào cần tiêm trong 12 tháng tới. 🎉" : "Không có mục nào."}
+            {filter === "todo" || filter === "upcoming" ? `Không có mũi nào cần tiêm trong ${SOON_DAYS} ngày tới. 🎉` : "Không có mục nào."}
           </p>
         ) : (
           <div className="space-y-6">
@@ -228,9 +225,6 @@ export function VaccinesTab({
   );
 }
 
-function addYear(d: string) {
-  return `${Number(d.slice(0, 4)) + 1}${d.slice(4)}`;
-}
 
 function groupByAge(doses: ScheduledDose[]): [string, ScheduledDose[]][] {
   const map = new Map<string, ScheduledDose[]>();

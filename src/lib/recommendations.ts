@@ -1,7 +1,7 @@
 /** Tổng hợp khuyến cáo cho từng thành viên từ số đo, lịch tiêm, bệnh sử. */
 import type { Illness, Measurement, Member, Vaccination } from "./types";
 import { ADULT_MONTHS, assessMeasurement, INDICATORS, measureIntervalMonths, zScore, type Level } from "./growth";
-import { buildSchedule } from "./vaccines";
+import { buildSchedule, isSoon, SOON_DAYS } from "./vaccines";
 import { addMonths, ageInMonths, daysBetween, formatDate, today } from "./date";
 
 export interface Recommendation {
@@ -81,6 +81,7 @@ export function recommendationsFor(
   const schedule = buildSchedule(member.birth_date, vaccinations);
   const overdue = schedule.filter((d) => d.status === "overdue");
   const due = schedule.filter((d) => d.status === "due");
+  const soon = schedule.filter(isSoon);
   if (overdue.length) {
     const tcmr = overdue.filter((d) => d.vaccine.program === "tcmr");
     recs.push({
@@ -95,6 +96,15 @@ export function recommendationsFor(
       level: "warning",
       title: `${due.length} mũi tiêm đến hạn`,
       detail: summarize(due.map((d) => `${d.vaccine.name} (${d.label}) – ${formatDate(d.dueDate)}`)),
+      tab: "vaccines",
+    });
+  }
+
+  if (soon.length) {
+    recs.push({
+      level: "info",
+      title: `${soon.length} mũi tiêm sắp tới (${SOON_DAYS} ngày)`,
+      detail: summarize(soon.map((d) => `${d.vaccine.name} (${d.label}) – ${formatDate(d.dueDate)}`)),
       tab: "vaccines",
     });
   }

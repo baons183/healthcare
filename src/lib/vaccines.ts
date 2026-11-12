@@ -180,14 +180,19 @@ export interface ScheduledDose {
 }
 
 const GRACE_DAYS = 30; // quá hạn sau 30 ngày kể từ mốc khuyến cáo
-const SOON_DAYS = 30; // "sắp đến" trong 30 ngày tới
+/** "Sắp tới": mũi có ngày tiêm trong N ngày tới */
+export const SOON_DAYS = 15;
+
+export function isSoon(d: { status: DoseStatus; dueDate: string }): boolean {
+  return d.status === "upcoming" && daysBetween(today(), d.dueDate) <= SOON_DAYS;
+}
 
 function statusFor(dueDate: string, nowAge: number, maxAge: number | undefined): DoseStatus {
   const now = today();
   const diff = daysBetween(now, dueDate); // >0: tương lai
   if (maxAge !== undefined && nowAge > maxAge) return "expired";
-  if (diff > SOON_DAYS) return "upcoming";
-  if (diff >= -GRACE_DAYS) return "due";
+  if (diff > 0) return "upcoming"; // chưa tới ngày (≤ 15 ngày tới = "sắp tới")
+  if (diff >= -GRACE_DAYS) return "due"; // đã tới ngày, trễ chưa quá 30 ngày
   return "overdue";
 }
 
@@ -280,7 +285,7 @@ export const STATUS_META: Record<DoseStatus, { label: string; cls: string; icon:
   done: { label: "Đã tiêm", cls: "badge-good", icon: "✓" },
   due: { label: "Đến hạn", cls: "badge-warning", icon: "!" },
   overdue: { label: "Quá hạn", cls: "badge-danger", icon: "!" },
-  upcoming: { label: "Sắp tới", cls: "badge-info", icon: "◷" },
+  upcoming: { label: "Chưa tới", cls: "badge-info", icon: "◷" },
   expired: { label: "Quá tuổi tiêm", cls: "badge-muted", icon: "–" },
   unknown: { label: "Chưa ghi nhận", cls: "badge-muted", icon: "?" },
 };
