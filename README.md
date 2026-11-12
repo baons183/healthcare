@@ -29,6 +29,13 @@
 3. Vào **Project Settings → API**, copy `Project URL` và `anon public key`.
 4. (Khuyến nghị lúc đầu) **Authentication → Sign In / Providers → Email**: tắt *Confirm email* để đăng ký xong dùng luôn. Bật lại khi mở cho người khác dùng.
 
+5. Chạy tiếp [`supabase/migrations/0002_phone_auth.sql`](supabase/migrations/0002_phone_auth.sql) (đăng nhập/mời bằng số điện thoại).
+6. Mã OTP qua email: **Authentication → Emails → Magic Link**, thêm `{{ .Token }}` vào nội dung email.
+7. (Tùy chọn) Đăng nhập bằng SĐT: **Authentication → Sign In / Providers → Phone** → bật, chọn Twilio. SMS tính phí theo tin.
+
+### Quét sổ tiêm bằng AI
+Cần `ANTHROPIC_API_KEY` (tạo tại <https://platform.claude.com> → Settings → API keys). Đặt trong `.env.local` và trên Vercel (bật *Sensitive*, **không** có tiền tố `NEXT_PUBLIC_`). Chi phí ước tính ~0,05–0,1 USD/ảnh.
+
 ### 2. Chạy trên máy
 ```bash
 npm install

@@ -23,7 +23,7 @@ function Settings() {
   const isOwner = family?.role === "owner";
   const [name, setName] = useState(family?.name ?? "");
   const [users, setUsers] = useState<{ user_id: string; email: string; role: string }[]>([]);
-  const [invites, setInvites] = useState<{ id: string; email: string; role: string }[]>([]);
+  const [invites, setInvites] = useState<{ id: string; email: string | null; phone: string | null; role: string }[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +111,7 @@ function Settings() {
           ))}
           {invites.map((i) => (
             <li key={i.id} className="flex items-center gap-2 py-2">
-              <span className="flex-1 truncate text-text-2">{i.email}</span>
+              <span className="flex-1 truncate text-text-2">{i.email ?? (i.phone ? `+${i.phone}` : "")}</span>
               <span className="badge badge-warning">Đang mời · {ROLE[i.role]}</span>
               <button className="btn btn-sm" onClick={() => run(async () => { await cancelInvite(i.id); await load(); })}>
                 Hủy
@@ -128,11 +128,11 @@ function Settings() {
                 await inviteUser(family.id, email, role);
                 setEmail("");
                 await load();
-              }, "Đã tạo lời mời. Người được mời chỉ cần đăng ký/đăng nhập bằng email này.");
+              }, "Đã tạo lời mời. Người được mời chỉ cần đăng ký/đăng nhập bằng email hoặc số điện thoại này.");
             }}
           >
-            <Field label="Mời bằng email">
-              <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vo.chong@gmail.com" />
+            <Field label="Mời bằng email hoặc số điện thoại">
+              <input className="input" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vo.chong@gmail.com hoặc 0912345678" />
             </Field>
             <Field label="Quyền">
               <select className="input" value={role} onChange={(e) => setRole(e.target.value as "editor" | "viewer")}>
@@ -156,7 +156,7 @@ function Settings() {
       <section className="card flex items-center justify-between gap-3 p-4">
         <div className="min-w-0">
           <p className="text-xs text-muted">Đang đăng nhập</p>
-          <p className="truncate font-semibold">{user?.email}</p>
+          <p className="truncate font-semibold">{user?.email || (user?.phone ? `+${user.phone}` : "")}</p>
         </div>
         <button className="btn btn-danger" onClick={signOut}>
           Đăng xuất

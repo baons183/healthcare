@@ -14,6 +14,7 @@ import {
   type Vaccination,
 } from "./types";
 import { compressImage } from "./image";
+import { isEmail, toE164 } from "./phone";
 
 type Table = "members" | "measurements" | "illnesses" | "vaccinations" | "documents";
 
@@ -141,16 +142,22 @@ export async function renameFamily(id: string, name: string) {
 export async function familyUsers(fid: string): Promise<{ user_id: string; email: string; role: string }[]> {
   return check(await supabase().rpc("family_user_list", { fid }));
 }
-export async function listInvites(fid: string): Promise<{ id: string; email: string; role: string }[]> {
-  return check(await supabase().from("family_invites").select("id,email,role").eq("family_id", fid));
+export async function listInvites(fid: string): Promise<{ id: string; email: string | null; phone: string | null; role: string }[]> {
+  return check(await supabase().from("family_invites").select("id,email,phone,role").eq("family_id", fid));
 }
-export async function inviteUser(fid: string, email: string, role: "editor" | "viewer") {
+/** contact: email hoặc số điện thoại */
+export async function inviteUser(fid: string, contact: string, role: "editor" | "viewer") {
   const { data: u } = await supabase().auth.getUser();
-  check(
-    await supabase()
-      .from("family_invites")
-      .insert({ family_id: fid, email: email.trim().toLowerCase(), role, invited_by: u.user?.id }),
-  );
+  const c = contact.trim();
+  let email: string | null = null;
+  let phone: string | null = null;
+  if (isEmail(c)) email = c.toLowerCase();
+  else {
+    const p = toE164(c);
+    if (!p) throw new Error("Nhập email hoặc số điện thoại hợp lệ.");
+    phone = p.slice(1); // lưu dạng 84912345678 (giống auth.users.phone)
+  }
+  check(await supabase().from("family_invites").insert({ family_id: fid, email, phone, role, invited_by: u.user?.id }));
 }
 export async function cancelInvite(id: string) {
   check(await supabase().from("family_invites").delete().eq("id", id));

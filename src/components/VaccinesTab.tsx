@@ -5,6 +5,7 @@ import { deleteVaccination, saveVaccination } from "@/lib/data";
 import { formatAgeMonths, formatDate, today } from "@/lib/date";
 import { buildSchedule, STATUS_META, VACCINE_BY_CODE, VACCINES, type DoseStatus, type ScheduledDose } from "@/lib/vaccines";
 import { Attachments } from "./Attachments";
+import { ScanVaccines } from "./ScanVaccines";
 import { confirmDelete, ErrorText, Field, Modal } from "./ui";
 
 type Filter = "todo" | "all" | "done";
@@ -23,6 +24,9 @@ export function VaccinesTab({
   const [filter, setFilter] = useState<Filter>("todo");
   const [showService, setShowService] = useState(true);
   const [editing, setEditing] = useState<Partial<Vaccination> | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [docsKey, setDocsKey] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const schedule = useMemo(() => buildSchedule(member.birth_date, vaccinations), [member.birth_date, vaccinations]);
   const counts = useMemo(() => {
@@ -64,12 +68,21 @@ export function VaccinesTab({
         <Count label="Quá hạn" value={counts.overdue} cls="text-danger" />
       </section>
 
+      {notice && <p className="rounded-lg bg-[var(--good-soft)] px-3 py-2 text-sm text-good">{notice}</p>}
+
       <section className="card p-4">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="font-bold">Ảnh sổ / phiếu tiêm chủng</h3>
-          <span className="text-xs text-muted">Chụp lại để không lo mất giấy</span>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-bold">Ảnh sổ / phiếu tiêm chủng</h3>
+            <p className="text-xs text-muted">Chụp lại để không lo mất giấy – AI có thể đọc và điền sẵn các mũi đã tiêm</p>
+          </div>
+          {canEdit && (
+            <button className="btn btn-primary" onClick={() => setScanning(true)}>
+              ✨ Quét sổ tiêm bằng AI
+            </button>
+          )}
         </div>
-        <Attachments member={member} refType="vaccination" refId={null} canEdit={canEdit} />
+        <Attachments key={docsKey} member={member} refType="vaccination" refId={null} canEdit={canEdit} />
       </section>
 
       <section>
@@ -143,6 +156,30 @@ export function VaccinesTab({
         Lịch tiêm mang tính tham khảo theo khuyến cáo TCMR Việt Nam và các vắc xin dịch vụ phổ biến. Lịch thực tế có thể thay đổi theo
         loại vắc xin và chỉ định của bác sĩ.
       </p>
+
+      <Modal
+        open={scanning}
+        title="Quét sổ tiêm bằng AI"
+        onClose={() => {
+          setScanning(false);
+          setDocsKey((k) => k + 1);
+        }}
+        wide
+      >
+        {scanning && (
+          <ScanVaccines
+            member={member}
+            existing={vaccinations}
+            onDone={(n) => {
+              setScanning(false);
+              setDocsKey((k) => k + 1);
+              setFilter("done");
+              setNotice(`Đã lưu ${n} mũi tiêm từ ảnh. Bạn có thể bấm vào từng mũi để sửa.`);
+              onChange();
+            }}
+          />
+        )}
+      </Modal>
 
       <Modal open={!!editing} title={editing?.id ? "Chi tiết mũi tiêm" : "Ghi nhận mũi tiêm"} onClose={() => setEditing(null)} wide>
         {editing && (
