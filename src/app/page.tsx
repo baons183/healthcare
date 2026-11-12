@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useFamily } from "@/components/FamilyProvider";
 import { MemberForm } from "@/components/MemberForm";
+import { QuickBP } from "@/components/QuickBP";
 import { Avatar, Empty, ErrorText, LevelIcon, Modal, Spinner } from "@/components/ui";
 import { byMember, extrasOf, useFamilyData } from "@/lib/hooks";
 import { recommendationsFor } from "@/lib/recommendations";
@@ -21,8 +22,16 @@ export default function Home() {
 
 function Dashboard() {
   const { family, canEdit } = useFamily();
-  const { data, error } = useFamilyData(family?.id);
+  const { data, error, reload } = useFamilyData(family?.id);
   const [adding, setAdding] = useState(false);
+  const [quickBp, setQuickBp] = useState(false);
+  // Lối tắt màn hình chính: /?quick=bp
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("quick") === "bp") {
+      setQuickBp(true);
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
   const router = useRouter();
 
   const rows = useMemo(() => {
@@ -47,9 +56,16 @@ function Dashboard() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Thành viên</h1>
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => setAdding(true)}>
-            + Thêm thành viên
-          </button>
+          <div className="flex gap-2">
+            {data.members.length > 0 && (
+              <button className="btn btn-primary" onClick={() => setQuickBp(true)}>
+                🎤 Đọc huyết áp
+              </button>
+            )}
+            <button className="btn" onClick={() => setAdding(true)}>
+              + Thành viên
+            </button>
+          </div>
         )}
       </div>
 
@@ -109,6 +125,8 @@ function Dashboard() {
           </div>
         </section>
       )}
+
+      <QuickBP open={quickBp} members={data.members} onClose={() => setQuickBp(false)} onSaved={reload} />
 
       <Modal open={adding} title="Thêm thành viên" onClose={() => setAdding(false)}>
         {family && (

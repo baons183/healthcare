@@ -22,6 +22,8 @@ import {
   LIPID_META,
   type LipidKey,
 } from "@/lib/vitals";
+import { afterBpSaved } from "@/lib/bpAlarm";
+import { QuickBP } from "./QuickBP";
 import { confirmDelete, ErrorText, Field, LevelBadge, LevelIcon, Modal } from "./ui";
 
 type View = "bp" | "glucose" | "lipid";
@@ -31,6 +33,7 @@ export function VitalsSection({ member, vitals, canEdit, onChange }: { member: M
   const [lipid, setLipid] = useState<LipidKey>("cholesterol");
   const [editing, setEditing] = useState<Partial<Vital> | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [quick, setQuick] = useState(false);
   const grades = latestVitalGrades(vitals, member.gender);
   const avg7 = bpAverage(vitals, 0, 7);
   const trend = bpAlerts(vitals);
@@ -67,10 +70,16 @@ export function VitalsSection({ member, vitals, canEdit, onChange }: { member: M
           <p className="text-sm text-text-2">Nhập kết quả đo tại nhà hoặc từ phiếu xét nghiệm.</p>
         </div>
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => setEditing({ measured_at: new Date().toISOString() })}>
-            + Thêm chỉ số
-          </button>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" onClick={() => setQuick(true)}>
+              🎤 Đọc huyết áp
+            </button>
+            <button className="btn" onClick={() => setEditing({ measured_at: new Date().toISOString() })}>
+              + Nhập chỉ số
+            </button>
+          </div>
         )}
+        <QuickBP open={quick} members={[member]} onClose={() => setQuick(false)} onSaved={onChange} />
       </div>
 
       {notice && <p className="mb-3 rounded-lg bg-[var(--info-soft)] px-3 py-2 text-sm text-info">{notice}</p>}
@@ -361,10 +370,8 @@ function VitalForm({ member, value, canEdit, onDone }: { member: Member; value: 
       let msg: string | undefined;
       if (sys && dia && isBpAlarm(sys, dia)) {
         if (isBpCrisis(sys, dia)) window.alert(`Huyết áp ${sys}/${dia} – rất cao!\n\n${BP_CRISIS_ADVICE}`);
-        // Báo cho người nhà (server tự kiểm tra lại mức nguy hiểm và chỉ báo lần đo mới)
-        const res = await fetch("/api/alerts/vital", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vital_id: saved.id }) }).catch(() => null);
-        const j = res ? await res.json().catch(() => ({})) : {};
-        msg = j.sent ? `Đã báo cho ${j.sent} người nhà về chỉ số huyết áp này.` : `Huyết áp ${sys}/${dia} ở mức nguy hiểm. Nghỉ 5 phút rồi đo lại.`;
+        const r = await afterBpSaved(saved.id, sys, dia);
+        msg = r.notified ? `Đã báo cho ${r.notified} người nhà về chỉ số huyết áp này.` : `Huyết áp ${sys}/${dia} ở mức nguy hiểm. Nghỉ 5 phút rồi đo lại.`;
       }
       onDone(msg);
     } catch (err) {
