@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useFamily } from "@/components/FamilyProvider";
 import { ErrorText, Field } from "@/components/ui";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { cancelInvite, exportFamily, familyUsers, inviteUser, listInvites, removeFamilyUser, renameFamily } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
 
@@ -144,6 +145,8 @@ function Settings() {
           </form>
         )}
       </section>
+
+      {user && <NotificationSettings userId={user.id} />}
 
       <section className="card space-y-3 p-4">
         <h2 className="font-bold">Dữ liệu</h2>
