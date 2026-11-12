@@ -4,7 +4,7 @@ import { CHECKUP_META, applicableKinds, checkupStatus, intervalLabel } from "./c
 import { feverAlerts } from "./fever";
 import { DOMAIN_META, lateMilestones } from "./milestones";
 import { activePregnancy, expectedGainAt, gestationalAge, tetanusInPregnancy, visitSchedule } from "./pregnancy";
-import { latestVitalGrades } from "./vitals";
+import { BP_CRISIS_ADVICE, bpAlerts, isBpCrisis, latestVitalGrades } from "./vitals";
 import { dewormStatus } from "./deworming";
 import { ADULT_MONTHS, assessMeasurement, INDICATORS, measureIntervalMonths, zScore, type Level } from "./growth";
 import { buildSchedule, isSoon, SOON_DAYS } from "./vaccines";
@@ -189,10 +189,22 @@ export function recommendationsFor(
   }
 
   // ---- Huyết áp, đường huyết, mỡ máu
+  const bpTrend = bpAlerts(extras.vitals);
   for (const g of latestVitalGrades(extras.vitals, member.gender)) {
     if (g.grade.level === "good") continue;
-    recs.push({ level: g.grade.level, title: `${g.title}: ${g.grade.label}`, detail: `${g.value} (đo ${formatDate(g.at)}). Đo lại vài lần; nếu vẫn bất thường hãy đi khám.`, tab: "checkups" });
+    // Lần đo cuối chỉ hơi cao nhưng đã có cảnh báo trung bình 7 ngày -> không lặp lại
+    if (g.key === "bp" && g.grade.level !== "danger" && bpTrend.some((a) => a.title.startsWith("Huyết áp trung bình"))) continue;
+    const recentDays = (Date.now() - new Date(g.at).getTime()) / 86400_000;
+    const [s, d] = g.key === "bp" ? g.value.split(" ")[0].split("/").map(Number) : [0, 0];
+    const crisis = g.key === "bp" && isBpCrisis(s, d) && recentDays <= 2;
+    recs.push({
+      level: g.grade.level,
+      title: `${g.title}: ${g.grade.label}`,
+      detail: `${g.value} (đo ${formatDate(g.at)}). ${crisis ? BP_CRISIS_ADVICE : "Đo lại vài lần; nếu vẫn bất thường hãy đi khám."}`,
+      tab: "checkups",
+    });
   }
+  for (const a of bpTrend) recs.push({ ...a, tab: "checkups" });
 
   // ---- Thai kỳ
   const preg = activePregnancy(extras.pregnancies);

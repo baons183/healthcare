@@ -24,6 +24,7 @@ export interface Member {
   emergency_phone?: string | null;
   insurance_number?: string | null;
   emergency_token?: string | null;
+  bp_times?: string[]; // giờ nhắc đo huyết áp (migration 0007)
 }
 
 export interface Measurement {

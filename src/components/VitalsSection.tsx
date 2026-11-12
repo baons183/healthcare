@@ -2,10 +2,27 @@
 import { useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { GlucoseContext, Member, Vital } from "@/lib/types";
-import { deleteVital, saveVital } from "@/lib/data";
+import { deleteVital, saveMember, saveVital } from "@/lib/data";
 import { formatDate, formatDateTime, toLocalInput } from "@/lib/date";
-import { GLUCOSE_CONTEXT, gradeBP, gradeGlucose, gradeLipid, latestVitalGrades, LIPID_KEYS, LIPID_META, type LipidKey } from "@/lib/vitals";
-import { confirmDelete, ErrorText, Field, LevelBadge, Modal } from "./ui";
+import { sortTimes } from "@/lib/medications";
+import {
+  BP_CRISIS_ADVICE,
+  BP_TIME_PRESETS,
+  bpAlerts,
+  bpAverage,
+  GLUCOSE_CONTEXT,
+  gradeBP,
+  gradeGlucose,
+  gradeLipid,
+  HOME_BP_LIMIT,
+  isBpAlarm,
+  isBpCrisis,
+  latestVitalGrades,
+  LIPID_KEYS,
+  LIPID_META,
+  type LipidKey,
+} from "@/lib/vitals";
+import { confirmDelete, ErrorText, Field, LevelBadge, LevelIcon, Modal } from "./ui";
 
 type View = "bp" | "glucose" | "lipid";
 
@@ -13,7 +30,10 @@ export function VitalsSection({ member, vitals, canEdit, onChange }: { member: M
   const [view, setView] = useState<View>("bp");
   const [lipid, setLipid] = useState<LipidKey>("cholesterol");
   const [editing, setEditing] = useState<Partial<Vital> | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const grades = latestVitalGrades(vitals, member.gender);
+  const avg7 = bpAverage(vitals, 0, 7);
+  const trend = bpAlerts(vitals);
   const sorted = [...vitals].sort((a, b) => a.measured_at.localeCompare(b.measured_at));
 
   const rows = sorted
@@ -52,6 +72,35 @@ export function VitalsSection({ member, vitals, canEdit, onChange }: { member: M
           </button>
         )}
       </div>
+
+      {notice && <p className="mb-3 rounded-lg bg-[var(--info-soft)] px-3 py-2 text-sm text-info">{notice}</p>}
+
+      {avg7 && (
+        <div className="mb-3 rounded-xl border border-border p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm text-text-2">Huyết áp trung bình 7 ngày ({avg7.count} lần đo)</p>
+            <LevelBadge level={avg7.sys >= HOME_BP_LIMIT.sys || avg7.dia >= HOME_BP_LIMIT.dia ? (avg7.sys >= 160 || avg7.dia >= 100 ? "danger" : "warning") : avg7.sys < 90 || avg7.dia < 60 ? "warning" : "good"}>
+              {avg7.sys >= HOME_BP_LIMIT.sys || avg7.dia >= HOME_BP_LIMIT.dia ? "Cao" : avg7.sys < 90 || avg7.dia < 60 ? "Thấp" : "Đạt"}
+            </LevelBadge>
+          </div>
+          <p className="tabular text-2xl font-bold">
+            {avg7.sys}/{avg7.dia} <span className="text-sm font-medium text-text-2">mmHg{avg7.pulse ? ` · mạch ${avg7.pulse}` : ""}</span>
+          </p>
+          <p className="text-xs text-muted">
+            Đo tại nhà: mục tiêu trung bình dưới {HOME_BP_LIMIT.sys}/{HOME_BP_LIMIT.dia}.{avg7.count < 3 ? " Cần ít nhất 3 lần đo để đánh giá." : ""}
+          </p>
+          {trend.map((a, i) => (
+            <div key={i} className="mt-2 flex gap-2 text-sm">
+              <LevelIcon level={a.level} />
+              <span>
+                <b>{a.title}</b> <span className="text-text-2">– {a.detail}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <BpReminder member={member} canEdit={canEdit} onChange={onChange} />
 
       {grades.length > 0 && (
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
@@ -177,8 +226,9 @@ export function VitalsSection({ member, vitals, canEdit, onChange }: { member: M
             member={member}
             value={editing}
             canEdit={canEdit}
-            onDone={() => {
+            onDone={(msg) => {
               setEditing(null);
+              setNotice(msg ?? null);
               onChange();
             }}
           />
@@ -207,7 +257,64 @@ function summarize(v: Vital): string {
 
 type FormState = Record<"systolic" | "diastolic" | "pulse" | "glucose" | LipidKey | "notes", string> & { at: string; ctx: GlucoseContext };
 
-function VitalForm({ member, value, canEdit, onDone }: { member: Member; value: Partial<Vital>; canEdit: boolean; onDone: () => void }) {
+/** Giờ nhắc đo huyết áp hằng ngày (thông báo đẩy cho cả nhà) */
+function BpReminder({ member, canEdit, onChange }: { member: Member; canEdit: boolean; onChange: () => void }) {
+  const [times, setTimes] = useState<string[]>(sortTimes(member.bp_times ?? []));
+  const [custom, setCustom] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(next: string[]) {
+    const prev = times;
+    setTimes(next);
+    setBusy(true);
+    setError(null);
+    try {
+      await saveMember({ id: member.id, family_id: member.family_id, bp_times: next });
+      onChange();
+    } catch (e) {
+      setTimes(prev);
+      const m = e instanceof Error ? e.message : String(e);
+      setError(/bp_times/.test(m) ? "Chưa cập nhật database – hãy chạy file SQL 0007_bp_reminders.sql trong Supabase." : m);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const toggle = (t: string) => save(times.includes(t) ? times.filter((x) => x !== t) : sortTimes([...times, t]));
+
+  return (
+    <div className="mb-4 rounded-xl bg-surface-2 p-3">
+      <p className="text-sm font-semibold">🔔 Nhắc đo huyết áp hằng ngày</p>
+      <p className="text-xs text-text-2">
+        {times.length ? `Nhắc lúc ${times.join(", ")} (bỏ qua nếu vừa đo trong 1 giờ trước).` : "Chưa đặt. Nên đo 2 lần/ngày: sáng trước khi uống thuốc và tối trước khi ngủ."}
+      </p>
+      {canEdit && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {[...new Set([...BP_TIME_PRESETS, ...times])].sort().map((t) => (
+            <button key={t} type="button" disabled={busy} aria-pressed={times.includes(t)} className={`btn btn-sm tabular ${times.includes(t) ? "btn-primary" : ""}`} onClick={() => toggle(t)}>
+              {t}
+            </button>
+          ))}
+          <input className="input w-auto py-1 text-sm" type="time" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Giờ khác" />
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={!custom || busy}
+            onClick={() => {
+              if (!times.includes(custom)) toggle(custom);
+              setCustom("");
+            }}
+          >
+            + Thêm
+          </button>
+        </div>
+      )}
+      <ErrorText error={error} />
+    </div>
+  );
+}
+
+function VitalForm({ member, value, canEdit, onDone }: { member: Member; value: Partial<Vital>; canEdit: boolean; onDone: (msg?: string) => void }) {
   const s = (n: number | null | undefined) => (n == null ? "" : String(n));
   const [f, setF] = useState<FormState>({
     at: toLocalInput(value.measured_at),
@@ -250,8 +357,16 @@ function VitalForm({ member, value, canEdit, onDone }: { member: Member; value: 
       if (Object.values(row).every((v) => v == null || typeof v === "string")) throw new Error("Nhập ít nhất một chỉ số.");
       if ((sys == null) !== (dia == null)) throw new Error("Huyết áp cần cả tâm thu và tâm trương.");
       if (Object.values(row).some((v) => typeof v === "number" && Number.isNaN(v))) throw new Error("Có giá trị không phải số.");
-      await saveVital({ id: value.id, family_id: member.family_id, member_id: member.id, measured_at: new Date(f.at).toISOString(), notes: f.notes, ...row });
-      onDone();
+      const saved = await saveVital({ id: value.id, family_id: member.family_id, member_id: member.id, measured_at: new Date(f.at).toISOString(), notes: f.notes, ...row });
+      let msg: string | undefined;
+      if (sys && dia && isBpAlarm(sys, dia)) {
+        if (isBpCrisis(sys, dia)) window.alert(`Huyết áp ${sys}/${dia} – rất cao!\n\n${BP_CRISIS_ADVICE}`);
+        // Báo cho người nhà (server tự kiểm tra lại mức nguy hiểm và chỉ báo lần đo mới)
+        const res = await fetch("/api/alerts/vital", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vital_id: saved.id }) }).catch(() => null);
+        const j = res ? await res.json().catch(() => ({})) : {};
+        msg = j.sent ? `Đã báo cho ${j.sent} người nhà về chỉ số huyết áp này.` : `Huyết áp ${sys}/${dia} ở mức nguy hiểm. Nghỉ 5 phút rồi đo lại.`;
+      }
+      onDone(msg);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

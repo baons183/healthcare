@@ -146,7 +146,7 @@ export function NotificationSettings({ userId }: { userId: string }) {
     ["notify_measure", "Nhắc cân đo", "Theo độ tuổi: < 1 tuổi hằng tháng, 1–2 tuổi 3 tháng/lần, 2–6 tuổi 6 tháng/lần, lớn hơn 1 năm/lần"],
     ["notify_vaccine", "Lịch tiêm, xổ giun & khám sắp tới", "Báo trước 15 ngày và nhắc lại 1 ngày trước (gồm khám răng, mắt, khám thai)"],
     ["notify_overdue", "Tổng hợp mũi quá hạn", "Vào ngày 1 hàng tháng"],
-    ["notify_medication", "Nhắc giờ uống thuốc", "Đúng giờ đã đặt trong mục Thuốc (chỉ thông báo trên thiết bị)"],
+    ["notify_medication", "Nhắc uống thuốc & đo huyết áp", "Đúng giờ đã đặt trong mục Thuốc và Huyết áp (chỉ thông báo trên thiết bị)"],
     ["notify_email", "Gửi thêm qua email", "Gộp các nhắc lịch trong ngày thành 1 email lúc 8h sáng"],
   ];
 
