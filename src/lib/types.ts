@@ -207,3 +207,17 @@ export function normalizeMeasurement(m: Record<string, unknown>): Measurement {
     head_cm: n(m.head_cm),
   };
 }
+
+export interface ReminderEvent {
+  id: string;
+  key: string;
+  family_id: string;
+  member_id: string;
+  kind: "med" | "bp";
+  ref_id: string | null;
+  day: string;
+  time: string;
+  status: "pending" | "done" | "missed";
+  sent_count: number;
+  done_at: string | null;
+}

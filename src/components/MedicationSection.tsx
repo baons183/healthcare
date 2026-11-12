@@ -4,6 +4,7 @@ import type { Illness, Medication, Member } from "@/lib/types";
 import { deleteMedication, saveMedication } from "@/lib/data";
 import { addDays, daysBetween, formatDate, today } from "@/lib/date";
 import { isActive, medicationSummary, sortTimes, TIME_PRESETS } from "@/lib/medications";
+import { TodayDoses } from "./TodayDoses";
 import { confirmDelete, ErrorText, Field, Modal } from "./ui";
 
 export function MedicationSection({
@@ -61,6 +62,7 @@ export function MedicationSection({
           </button>
         )}
       </div>
+      <TodayDoses member={member} medications={medications} canEdit={canEdit} />
       {active.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-text-2">Không có thuốc nào đang dùng.</p>
       ) : (

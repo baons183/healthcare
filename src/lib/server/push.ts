@@ -24,6 +24,12 @@ export interface PushPayload {
   body: string;
   url?: string;
   tag?: string;
+  /** Nhắc quan trọng: nằm lì trên màn hình, rung dài, gửi ưu tiên cao */
+  urgent?: boolean;
+  /** Nút trên thông báo (tối đa 2), xử lý trong public/sw.js */
+  actions?: { action: "done" | "snooze"; title: string }[];
+  key?: string;
+  sig?: string;
 }
 
 let vapidReady = false;
@@ -54,7 +60,7 @@ export async function sendToUser(sb: SupabaseClient, userId: string, payload: Pu
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
         JSON.stringify(payload),
-        { TTL: 60 * 60 * 24 },
+        payload.urgent ? { TTL: 60 * 60, urgency: "high" } : { TTL: 60 * 60 * 24 },
       );
       ok++;
     } catch (e) {

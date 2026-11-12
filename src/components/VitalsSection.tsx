@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { GlucoseContext, Member, Vital } from "@/lib/types";
 import { deleteVital, saveMember, saveVital } from "@/lib/data";
 import { formatDate, formatDateTime, toLocalInput } from "@/lib/date";
-import { sortTimes } from "@/lib/medications";
+import { alarmIntentUrl, isAndroid, sortTimes } from "@/lib/medications";
 import {
   BP_CRISIS_ADVICE,
   BP_TIME_PRESETS,
@@ -270,6 +270,8 @@ type FormState = Record<"systolic" | "diastolic" | "pulse" | "glucose" | LipidKe
 function BpReminder({ member, canEdit, onChange }: { member: Member; canEdit: boolean; onChange: () => void }) {
   const [times, setTimes] = useState<string[]>(sortTimes(member.bp_times ?? []));
   const [custom, setCustom] = useState("");
+  const [android, setAndroid] = useState(false);
+  useEffect(() => setAndroid(isAndroid()), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -316,6 +318,16 @@ function BpReminder({ member, canEdit, onChange }: { member: Member; canEdit: bo
           >
             + Thêm
           </button>
+        </div>
+      )}
+      {android && times.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-text-2">
+          Đặt báo thức thật:
+          {times.map((t) => (
+            <a key={t} className="btn btn-sm" href={alarmIntentUrl(t, `Đo huyết áp – ${member.full_name}`)}>
+              ⏰ {t}
+            </a>
+          ))}
         </div>
       )}
       <ErrorText error={error} />

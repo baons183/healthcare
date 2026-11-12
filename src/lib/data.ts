@@ -11,6 +11,7 @@ import {
   type Checkup,
   type Medication,
   type MemberExtras,
+  type ReminderEvent,
   type Milestone,
   type Pregnancy,
   type Temperature,
@@ -271,4 +272,23 @@ export async function exportFamily(fid: string) {
     check(await supabase().from("documents").select("*").eq("family_id", fid)),
   ]);
   return { exported_at: new Date().toISOString(), members, measurements, illnesses, vaccinations, dewormings, ...extras, documents };
+}
+
+// ---------- Lần nhắc uống thuốc / đo huyết áp (migration 0008)
+export async function listReminderEvents(memberId: string, sinceDay: string): Promise<ReminderEvent[]> {
+  const { data, error } = await supabase().from("reminder_events").select("*").eq("member_id", memberId).gte("day", sinceDay).order("day");
+  if (error) return [];
+  return data as ReminderEvent[];
+}
+
+/** Đánh dấu đã uống / đã đo (tạo trước nếu chưa tới giờ nhắc) */
+export async function markReminderDone(e: Pick<ReminderEvent, "key" | "family_id" | "member_id" | "kind" | "ref_id" | "day" | "time">, done = true) {
+  const { data: u } = await supabase().auth.getUser();
+  const res = await supabase()
+    .from("reminder_events")
+    .upsert(
+      { ...e, status: done ? "done" : "pending", done_at: done ? new Date().toISOString() : null, done_by: done ? u.user?.id : null },
+      { onConflict: "key" },
+    );
+  if (res.error) throw new Error(/reminder_events/.test(res.error.message) ? "Chưa cập nhật database – hãy chạy file SQL 0008_reminder_events.sql." : res.error.message);
 }

@@ -31,3 +31,15 @@ export function medicationSummary(m: Medication): string {
   } else parts.push("dùng lâu dài");
   return parts.join(" · ");
 }
+
+/** Android: mở ứng dụng Đồng hồ với báo thức điền sẵn (người dùng bấm lưu). Không hỗ trợ iPhone. */
+export function alarmIntentUrl(time: string, message: string): string {
+  const [h, m] = time.split(":").map(Number);
+  return (
+    "intent:#Intent;action=android.intent.action.SET_ALARM;" +
+    `i.android.intent.extra.alarm.HOUR=${h};i.android.intent.extra.alarm.MINUTES=${m};` +
+    `S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(message)};end`
+  );
+}
+
+export const isAndroid = () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
