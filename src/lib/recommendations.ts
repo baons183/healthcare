@@ -1,5 +1,6 @@
 /** Tổng hợp khuyến cáo cho từng thành viên từ số đo, lịch tiêm, bệnh sử. */
-import type { Illness, Measurement, Member, Vaccination } from "./types";
+import type { Deworming, Illness, Measurement, Member, Vaccination } from "./types";
+import { dewormStatus } from "./deworming";
 import { ADULT_MONTHS, assessMeasurement, INDICATORS, measureIntervalMonths, zScore, type Level } from "./growth";
 import { buildSchedule, isSoon, SOON_DAYS } from "./vaccines";
 import { addMonths, ageInMonths, daysBetween, formatDate, today } from "./date";
@@ -16,6 +17,7 @@ export function recommendationsFor(
   measurements: Measurement[],
   vaccinations: Vaccination[],
   illnesses: Illness[],
+  dewormings: Deworming[] = [],
 ): Recommendation[] {
   const recs: Recommendation[] = [];
   const age = ageInMonths(member.birth_date);
@@ -107,6 +109,21 @@ export function recommendationsFor(
       detail: summarize(soon.map((d) => `${d.vaccine.name} (${d.label}) – ${formatDate(d.dueDate)}`)),
       tab: "vaccines",
     });
+  }
+
+  // ---- Xổ giun
+  const dw = dewormStatus(member.birth_date, dewormings);
+  if (dw.state === "nodata") {
+    recs.push({ level: "info", title: "Chưa có lịch sử xổ giun", detail: `Nên xổ giun định kỳ ${dw.intervalMonths} tháng/lần. Ghi lại lần gần nhất để app nhắc lịch.`, tab: "vaccines" });
+  } else if (dw.state === "overdue" || dw.state === "due") {
+    recs.push({
+      level: "warning",
+      title: dw.state === "overdue" ? "Quá hạn xổ giun" : "Đến hạn xổ giun",
+      detail: `Lần gần nhất ${formatDate(dw.last!.given_on)}, nên xổ giun ${dw.intervalMonths} tháng/lần (hạn ${formatDate(dw.nextDate)}).`,
+      tab: "vaccines",
+    });
+  } else if (dw.soon) {
+    recs.push({ level: "info", title: "Sắp đến lịch xổ giun", detail: `Ngày ${formatDate(dw.nextDate)}.`, tab: "vaccines" });
   }
 
   // ---- Bệnh đang điều trị kéo dài

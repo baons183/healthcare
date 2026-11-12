@@ -29,7 +29,7 @@ function Dashboard() {
     if (!data) return [];
     return data.members.map((m) => {
       const ms = byMember(data.measurements, m.id);
-      const recs = recommendationsFor(m, ms, byMember(data.vaccinations, m.id), byMember(data.illnesses, m.id));
+      const recs = recommendationsFor(m, ms, byMember(data.vaccinations, m.id), byMember(data.illnesses, m.id), byMember(data.dewormings, m.id));
       const lastH = [...ms].reverse().find((x) => x.height_cm)?.height_cm ?? null;
       const lastW = [...ms].reverse().find((x) => x.weight_kg)?.weight_kg ?? null;
       const lastDate = ms[ms.length - 1]?.measured_on;

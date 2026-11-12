@@ -10,10 +10,10 @@ import { VaccinesTab } from "@/components/VaccinesTab";
 import { IllnessTab } from "@/components/IllnessTab";
 import { Attachments } from "@/components/Attachments";
 import { Avatar, confirmDelete, ErrorText, LevelIcon, Modal, Spinner } from "@/components/ui";
-import { deleteMember, getMember, listIllnesses, listMeasurements, listVaccinations } from "@/lib/data";
+import { deleteMember, getMember, listDewormings, listIllnesses, listMeasurements, listVaccinations } from "@/lib/data";
 import { recommendationsFor } from "@/lib/recommendations";
 import { formatAge, formatDate } from "@/lib/date";
-import type { Illness, Measurement, Member, Vaccination } from "@/lib/types";
+import type { Deworming, Illness, Measurement, Member, Vaccination } from "@/lib/types";
 
 const TABS = [
   { key: "overview", label: "Tổng quan" },
@@ -44,21 +44,24 @@ function MemberView() {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
   const [illnesses, setIllnesses] = useState<Illness[]>([]);
+  const [dewormings, setDewormings] = useState<Deworming[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [m, ms, vs, is] = await Promise.all([
+      const [m, ms, vs, is, dws] = await Promise.all([
         getMember(id),
         listMeasurements({ memberId: id }),
         listVaccinations({ memberId: id }),
         listIllnesses({ memberId: id }),
+        listDewormings({ memberId: id }).catch(() => [] as Deworming[]),
       ]);
       setMember(m);
       setMeasurements(ms);
       setVaccinations(vs);
       setIllnesses(is);
+      setDewormings(dws);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -69,8 +72,8 @@ function MemberView() {
   }, [load]);
 
   const recs = useMemo(
-    () => (member ? recommendationsFor(member, measurements, vaccinations, illnesses) : []),
-    [member, measurements, vaccinations, illnesses],
+    () => (member ? recommendationsFor(member, measurements, vaccinations, illnesses, dewormings) : []),
+    [member, measurements, vaccinations, illnesses, dewormings],
   );
 
   if (error) return <ErrorText error={error} />;
@@ -171,7 +174,7 @@ function MemberView() {
         </div>
       )}
       {tab === "growth" && <GrowthTab member={member} measurements={measurements} canEdit={canEdit} onChange={load} />}
-      {tab === "vaccines" && <VaccinesTab member={member} vaccinations={vaccinations} canEdit={canEdit} onChange={load} />}
+      {tab === "vaccines" && <VaccinesTab member={member} vaccinations={vaccinations} dewormings={dewormings} canEdit={canEdit} onChange={load} />}
       {tab === "illness" && <IllnessTab member={member} illnesses={illnesses} canEdit={canEdit} onChange={load} />}
 
       <Modal open={editing} title="Sửa hồ sơ" onClose={() => setEditing(false)}>

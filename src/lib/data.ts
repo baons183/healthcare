@@ -6,6 +6,7 @@
 import { supabase } from "./supabase/client";
 import {
   normalizeMeasurement,
+  type Deworming,
   type DocumentFile,
   type Illness,
   type Measurement,
@@ -16,7 +17,7 @@ import {
 import { compressImage } from "./image";
 import { isEmail, toE164 } from "./phone";
 
-type Table = "members" | "measurements" | "illnesses" | "vaccinations" | "documents";
+type Table = "members" | "measurements" | "illnesses" | "vaccinations" | "documents" | "dewormings";
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -83,6 +84,16 @@ export async function listVaccinations(by: { memberId?: string; familyId?: strin
 }
 export const saveVaccination = (m: Partial<Vaccination>) => upsert<Vaccination>("vaccinations", m);
 export const deleteVaccination = (id: string) => remove("vaccinations", id);
+
+// ---------- Dewormings (xổ giun)
+export async function listDewormings(by: { memberId?: string; familyId?: string }): Promise<Deworming[]> {
+  let q = supabase().from("dewormings").select("*").order("given_on", { ascending: false });
+  if (by.memberId) q = q.eq("member_id", by.memberId);
+  if (by.familyId) q = q.eq("family_id", by.familyId);
+  return check(await q);
+}
+export const saveDeworming = (m: Partial<Deworming>) => upsert<Deworming>("dewormings", m);
+export const deleteDeworming = (id: string) => remove("dewormings", id);
 
 // ---------- Documents (ảnh giấy tờ)
 const BUCKET = "documents";
@@ -168,12 +179,13 @@ export async function removeFamilyUser(fid: string, userId: string) {
 
 /** Xuất toàn bộ dữ liệu gia đình ra JSON (sao lưu) */
 export async function exportFamily(fid: string) {
-  const [members, measurements, illnesses, vaccinations, documents] = await Promise.all([
+  const [members, measurements, illnesses, vaccinations, dewormings, documents] = await Promise.all([
     listMembers(fid),
     listMeasurements({ familyId: fid }),
     listIllnesses({ familyId: fid }),
     listVaccinations({ familyId: fid }),
+    listDewormings({ familyId: fid }).catch(() => []),
     check(await supabase().from("documents").select("*").eq("family_id", fid)),
   ]);
-  return { exported_at: new Date().toISOString(), members, measurements, illnesses, vaccinations, documents };
+  return { exported_at: new Date().toISOString(), members, measurements, illnesses, vaccinations, dewormings, documents };
 }

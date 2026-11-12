@@ -1,11 +1,12 @@
 "use client";
 import { useMemo, useState } from "react";
-import type { Member, Vaccination } from "@/lib/types";
+import type { Deworming, Member, Vaccination } from "@/lib/types";
 import { deleteVaccination, saveVaccination } from "@/lib/data";
 import { formatAgeMonths, formatDate, today } from "@/lib/date";
 import { buildSchedule, isSoon, SOON_DAYS, STATUS_META, VACCINE_BY_CODE, VACCINES, type DoseStatus, type ScheduledDose } from "@/lib/vaccines";
 import { Attachments } from "./Attachments";
 import { ScanVaccines } from "./ScanVaccines";
+import { DewormingSection } from "./DewormingSection";
 import { confirmDelete, ErrorText, Field, Modal } from "./ui";
 
 type Filter = "todo" | "all" | "done" | "upcoming" | "due" | "overdue";
@@ -13,11 +14,13 @@ type Filter = "todo" | "all" | "done" | "upcoming" | "due" | "overdue";
 export function VaccinesTab({
   member,
   vaccinations,
+  dewormings,
   canEdit,
   onChange,
 }: {
   member: Member;
   vaccinations: Vaccination[];
+  dewormings: Deworming[];
   canEdit: boolean;
   onChange: () => void;
 }) {
@@ -104,6 +107,8 @@ export function VaccinesTab({
         </div>
         <Attachments key={docsKey} member={member} refType="vaccination" refId={null} canEdit={canEdit} />
       </section>
+
+      <DewormingSection member={member} records={dewormings} canEdit={canEdit} onChange={onChange} />
 
       <section>
         <div className="mb-3 flex flex-wrap items-center gap-2">

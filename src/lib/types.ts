@@ -65,7 +65,16 @@ export interface Vaccination {
   notes: string | null;
 }
 
-export type RefType = "general" | "vaccination" | "illness" | "measurement";
+export interface Deworming {
+  id: string;
+  family_id: string;
+  member_id: string;
+  given_on: string;
+  medicine: string | null;
+  notes: string | null;
+}
+
+export type RefType ="general" | "vaccination" | "illness" | "measurement";
 
 export interface DocumentFile {
   id: string;

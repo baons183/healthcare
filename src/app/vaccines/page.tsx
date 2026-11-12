@@ -8,6 +8,7 @@ import { Avatar, Empty, ErrorText, Field, Modal, Spinner } from "@/components/ui
 import { byMember, useFamilyData } from "@/lib/hooks";
 import { buildSchedule, isSoon, SOON_DAYS, STATUS_META } from "@/lib/vaccines";
 import { formatAge, formatDate } from "@/lib/date";
+import { DEWORM_META, dewormStatus } from "@/lib/deworming";
 
 export default function VaccinesPage() {
   return (
@@ -39,12 +40,15 @@ function FamilyVaccines() {
   if (!data) return <Spinner />;
 
   const scanMember = data.members.find((m) => m.id === scanMemberId);
+  const deworm = data.members
+    .map((m) => ({ m, st: dewormStatus(m.birth_date, byMember(data.dewormings, m.id)) }))
+    .filter(({ st }) => st.state === "due" || st.state === "overdue" || st.state === "nodata" || st.soon);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Lịch tiêm cả nhà</h1>
+          <h1 className="text-2xl font-bold">Lịch tiêm & xổ giun cả nhà</h1>
           <p className="text-sm text-text-2">Các mũi quá hạn, đến hạn và sắp tới trong {SOON_DAYS} ngày</p>
         </div>
         {canEdit && data.members.length > 0 && (
@@ -62,6 +66,30 @@ function FamilyVaccines() {
 
       {notice && <p className="rounded-lg bg-[var(--good-soft)] px-3 py-2 text-sm text-good">{notice}</p>}
 
+      {deworm.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-lg font-bold">🪱 Xổ giun</h2>
+          <div className="card divide-y divide-border">
+            {deworm.map(({ m, st }) => {
+              const meta = st.soon ? { label: "Sắp tới", cls: "badge-info" } : DEWORM_META[st.state];
+              return (
+                <Link key={m.id} href={`/members/${m.id}?tab=vaccines`} className="flex items-center gap-3 p-3 hover:bg-surface-2">
+                  <Avatar name={m.full_name} color={m.color} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{m.full_name}</p>
+                    <p className="text-xs text-text-2">
+                      {st.last ? `Lần gần nhất ${formatDate(st.last.given_on)} · hạn ${formatDate(st.nextDate)}` : `Nên xổ giun ${st.intervalMonths} tháng/lần`}
+                    </p>
+                  </div>
+                  <span className={`badge ${meta.cls}`}>{meta.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {items.length > 0 && <h2 className="text-lg font-bold">💉 Tiêm chủng</h2>}
       {items.length === 0 ? (
         <Empty title="Không có mũi tiêm nào sắp tới">Mọi người đã tiêm đủ theo lịch hoặc chưa có thành viên nào.</Empty>
       ) : (

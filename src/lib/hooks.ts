@@ -1,13 +1,14 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { listIllnesses, listMeasurements, listMembers, listVaccinations } from "./data";
-import type { Illness, Measurement, Member, Vaccination } from "./types";
+import { listDewormings, listIllnesses, listMeasurements, listMembers, listVaccinations } from "./data";
+import type { Deworming, Illness, Measurement, Member, Vaccination } from "./types";
 
 export interface FamilyData {
   members: Member[];
   measurements: Measurement[];
   vaccinations: Vaccination[];
   illnesses: Illness[];
+  dewormings: Deworming[];
 }
 
 export function useFamilyData(familyId: string | undefined) {
@@ -17,13 +18,15 @@ export function useFamilyData(familyId: string | undefined) {
   const reload = useCallback(async () => {
     if (!familyId) return;
     try {
-      const [members, measurements, vaccinations, illnesses] = await Promise.all([
+      const [members, measurements, vaccinations, illnesses, dewormings] = await Promise.all([
         listMembers(familyId),
         listMeasurements({ familyId }),
         listVaccinations({ familyId }),
         listIllnesses({ familyId }),
+        // bảng xổ giun có thể chưa được tạo (chưa chạy migration 0003)
+        listDewormings({ familyId }).catch(() => [] as Deworming[]),
       ]);
-      setData({ members, measurements, vaccinations, illnesses });
+      setData({ members, measurements, vaccinations, illnesses, dewormings });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
