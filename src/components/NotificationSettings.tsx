@@ -30,6 +30,8 @@ export function NotificationSettings({ userId }: { userId: string }) {
   const [support, setSupport] = useState<{ ok: boolean; reason?: string }>({ ok: true });
   const [subscribed, setSubscribed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT);
+  const [dailyTime, setDailyTime] = useState("06:30");
+  const [savedTime, setSavedTime] = useState("06:30");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -43,6 +45,10 @@ export function NotificationSettings({ userId }: { userId: string }) {
       setSubscribed(!!sub && Notification.permission === "granted");
     }
     const { data } = await supabase().from("notification_settings").select("*").eq("user_id", userId).maybeSingle();
+    if (data && typeof data.daily_time === "string") {
+      setDailyTime(data.daily_time);
+      setSavedTime(data.daily_time);
+    }
     if (data) setPrefs({ ...DEFAULT, ...Object.fromEntries(Object.keys(DEFAULT).filter((k) => k in data).map((k) => [k, data[k]])) } as Prefs);
   }, [userId]);
 
@@ -133,6 +139,20 @@ export function NotificationSettings({ userId }: { userId: string }) {
       }
     });
 
+  const saveTime = () =>
+    run(async () => {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(dailyTime)) throw new Error("Giờ không hợp lệ.");
+      const { error } = await supabase()
+        .from("notification_settings")
+        .upsert({ user_id: userId, ...prefs, daily_time: dailyTime, updated_at: new Date().toISOString() });
+      if (error) {
+        setDailyTime(savedTime);
+        throw new Error(/daily_time/.test(error.message) ? "Chưa cập nhật database – hãy chạy file SQL 0009_daily_time.sql." : error.message);
+      }
+      setSavedTime(dailyTime);
+      setMsg(`Đã đổi giờ nhắc lịch hằng ngày thành ${dailyTime}.`);
+    });
+
   const test = () =>
     run(async () => {
       const res = await fetch("/api/push/test", { method: "POST" });
@@ -147,7 +167,7 @@ export function NotificationSettings({ userId }: { userId: string }) {
     ["notify_vaccine", "Lịch tiêm, xổ giun & khám sắp tới", "Báo trước 15 ngày và nhắc lại 1 ngày trước (gồm khám răng, mắt, khám thai)"],
     ["notify_overdue", "Tổng hợp mũi quá hạn", "Vào ngày 1 hàng tháng"],
     ["notify_medication", "Nhắc uống thuốc & đo huyết áp", "Đúng giờ đã đặt trong mục Thuốc và Huyết áp (chỉ thông báo trên thiết bị)"],
-    ["notify_email", "Gửi thêm qua email", "Gộp các nhắc lịch trong ngày thành 1 email lúc 8h sáng"],
+    ["notify_email", "Gửi thêm qua email", `Gộp các nhắc lịch trong ngày thành 1 email lúc ${savedTime}`],
   ];
 
   return (
@@ -155,7 +175,7 @@ export function NotificationSettings({ userId }: { userId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-bold">🔔 Thông báo</h2>
-          <p className="text-xs text-muted">Gửi khoảng 8h sáng mỗi ngày khi có lịch cần nhắc</p>
+          <p className="text-xs text-muted">Nhắc lịch hằng ngày lúc {savedTime} (chỉ gửi khi có lịch cần nhắc)</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {(subscribed || prefs.notify_email) && (
@@ -176,6 +196,18 @@ export function NotificationSettings({ userId }: { userId: string }) {
         </div>
       </div>
       {!support.ok && support.reason && <p className="rounded-lg bg-[var(--info-soft)] px-3 py-2 text-sm text-info">{support.reason}</p>}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3">
+        <label htmlFor="daily-time" className="flex-1 text-sm">
+          <span className="block font-semibold">⏰ Giờ nhận nhắc lịch hằng ngày</span>
+          <span className="block text-xs text-text-2">Cân đo, tiêm chủng, xổ giun, khám định kỳ, mũi quá hạn. Có thể đến trễ tối đa 15 phút.</span>
+        </label>
+        <input id="daily-time" type="time" className="input w-auto tabular" value={dailyTime} onChange={(e) => setDailyTime(e.target.value)} />
+        {dailyTime !== savedTime && (
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={saveTime}>
+            Lưu
+          </button>
+        )}
+      </div>
       <ul className="divide-y divide-border">
         {OPTIONS.map(([k, label, hint]) => (
           <li key={k} className="flex items-center gap-3 py-2.5">

@@ -9,9 +9,12 @@ export function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Múi giờ của app – server (Vercel chạy UTC) và trình duyệt đều tính "hôm nay" theo giờ Việt Nam */
+export const APP_TIMEZONE = "Asia/Ho_Chi_Minh";
+const DAY_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+
 export function today(): string {
-  const d = new Date();
-  return toISODate(new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())));
+  return DAY_FMT.format(new Date()); // "yyyy-mm-dd"
 }
 
 const DAY = 86400000;

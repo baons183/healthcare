@@ -10,6 +10,8 @@
 import { NextResponse } from "next/server";
 import { adminClient, DEFAULT_SETTINGS, familyUserIds, sendToUser } from "@/lib/server/push";
 import { signKey } from "@/lib/server/sign";
+import { appUrl } from "@/lib/server/mail";
+import { dailyRecipients, runDailyFor, type DailyReport } from "@/lib/server/daily";
 import { addDays, hhmmToMinutes, vnNow } from "@/lib/date";
 import type { Medication } from "@/lib/types";
 
@@ -49,6 +51,27 @@ export async function GET(req: Request) {
     return diff >= 0 && diff < WINDOW_MIN;
   };
 
+  // ---- 0) Nhắc lịch hằng ngày: đúng giờ mỗi người chọn (mặc định 06:30). Lỡ lịch thì gửi bù trong ngày.
+  const daily: DailyReport[] = [];
+  try {
+    const due = (await dailyRecipients(sb)).filter((r) => now.minutes >= hhmmToMinutes(r.time));
+    if (due.length) {
+      const key = `daily:${now.date}`;
+      const { data: done } = await sb.from("notification_log").select("user_id").eq("key", key).in("user_id", due.map((r) => r.userId));
+      const doneSet = new Set((done ?? []).map((r) => r.user_id as string));
+      for (const { userId } of due.filter((r) => !doneSet.has(r.userId))) {
+        try {
+          daily.push(await runDailyFor(sb, userId, appUrl(req)));
+          await sb.from("notification_log").upsert({ user_id: userId, key });
+        } catch (e) {
+          console.error("daily failed", (e as Error).message);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("daily step failed", (e as Error).message);
+  }
+
   // ---- 1) Tạo các lần nhắc mới đến giờ
   const { data: meds } = await sb
     .from("medications")
@@ -84,7 +107,7 @@ export async function GET(req: Request) {
     .gte("day", addDays(now.date, -1));
   if (error) return NextResponse.json({ ok: false, error: error.message });
   let events = (evs ?? []) as EventRow[];
-  if (!events.length) return NextResponse.json({ ok: true, events: 0 });
+  if (!events.length) return NextResponse.json({ ok: true, daily: daily.length, events: 0 });
 
   // Huyết áp: đã đo từ 60 phút trước giờ hẹn -> coi như xong
   const bpEvents = events.filter((e) => e.kind === "bp");
@@ -173,5 +196,5 @@ export async function GET(req: Request) {
       console.error("reminder failed", e.key, (err as Error).message);
     }
   }
-  return NextResponse.json({ ok: true, created: fresh.length, sent, missed });
+  return NextResponse.json({ ok: true, daily: daily.length, created: fresh.length, sent, missed });
 }
