@@ -1,4 +1,5 @@
 import { formatAge, formatDate } from "@/lib/date";
+import { contactsOf, type EmergencyContact } from "@/lib/types";
 
 export interface EmergencyData {
   full_name: string;
@@ -9,6 +10,7 @@ export interface EmergencyData {
   chronic_conditions: string | null;
   emergency_contact?: string | null;
   emergency_phone?: string | null;
+  emergency_contacts?: EmergencyContact[] | null;
   insurance_number?: string | null;
   medications: { name: string; dosage: string | null }[];
 }
@@ -53,13 +55,23 @@ export function EmergencyCardView({ d }: { d: EmergencyData }) {
         </Row>
         {d.insurance_number && <Row label="Số thẻ BHYT">{d.insurance_number}</Row>}
         <Row label="📞 Liên hệ khẩn cấp">
-          {d.emergency_phone ? (
-            <a href={`tel:${d.emergency_phone.replace(/\s/g, "")}`} className="text-lg font-bold text-primary underline">
-              {d.emergency_contact ? `${d.emergency_contact}: ` : ""}
-              {d.emergency_phone}
-            </a>
+          {contactsOf(d).length ? (
+            <ul className="space-y-1.5">
+              {contactsOf(d).map((c, i) => (
+                <li key={i}>
+                  {c.phone ? (
+                    <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="text-lg font-bold text-primary underline">
+                      📞 {c.name ? `${c.name}: ` : ""}
+                      {c.phone}
+                    </a>
+                  ) : (
+                    c.name
+                  )}
+                </li>
+              ))}
+            </ul>
           ) : (
-            d.emergency_contact || "Chưa có"
+            "Chưa có"
           )}
         </Row>
       </div>

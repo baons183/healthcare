@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { saveMember } from "@/lib/data";
 import { today } from "@/lib/date";
-import type { Member } from "@/lib/types";
+import { contactsOf, type EmergencyContact, type Member } from "@/lib/types";
 import { ErrorText, Field } from "./ui";
 
 const COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#6250d6", "#e87ba4", "#008300", "#c98500", "#e34948"];
@@ -22,6 +22,11 @@ export function MemberForm({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<EmergencyContact[]>(() => {
+    const c = member ? contactsOf(member) : [];
+    return c.length ? c : [{ name: "", phone: "" }];
+  });
+  const setContact = (i: number, k: keyof EmergencyContact, v: string) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
   const set = <K extends keyof Member>(k: K, v: Member[K]) => setF((p) => ({ ...p, [k]: v }));
 
   async function submit(e: React.FormEvent) {
@@ -41,13 +46,13 @@ export function MemberForm({
         notes: f.notes,
         color: f.color,
         // cột mới (migration 0005) – chỉ gửi khi có giá trị để không lỗi nếu chưa chạy SQL
-        ...(f.emergency_contact || member?.emergency_contact ? { emergency_contact: f.emergency_contact } : {}),
-        ...(f.emergency_phone || member?.emergency_phone ? { emergency_phone: f.emergency_phone } : {}),
+        ...contactFields(contacts, member),
         ...(f.insurance_number || member?.insurance_number ? { insurance_number: f.insurance_number } : {}),
       });
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(/emergency_contacts/.test(msg) ? "Chưa cập nhật database – hãy chạy file SQL 0010_emergency_contacts.sql trong Supabase." : msg);
     } finally {
       setBusy(false);
     }
@@ -102,13 +107,38 @@ export function MemberForm({
       </Field>
       <fieldset className="space-y-3 rounded-xl border border-border p-3">
         <legend className="px-1 text-sm font-bold">🆘 Thông tin khẩn cấp</legend>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Người liên hệ">
-            <input className="input" value={f.emergency_contact ?? ""} placeholder="VD: Mẹ – Lan" onChange={(e) => set("emergency_contact", e.target.value)} />
-          </Field>
-          <Field label="SĐT liên hệ">
-            <input className="input" type="tel" inputMode="tel" value={f.emergency_phone ?? ""} onChange={(e) => set("emergency_phone", e.target.value)} />
-          </Field>
+        <div className="space-y-2">
+          <span className="label">Người liên hệ</span>
+          {contacts.map((c, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                className="input min-w-0 flex-1"
+                value={c.name}
+                placeholder={i === 0 ? "VD: Mẹ – Lan" : "VD: Bố – Hùng"}
+                aria-label={`Tên người liên hệ ${i + 1}`}
+                onChange={(e) => setContact(i, "name", e.target.value)}
+              />
+              <input
+                className="input w-[42%] min-w-0"
+                type="tel"
+                inputMode="tel"
+                value={c.phone}
+                placeholder="Số điện thoại"
+                aria-label={`SĐT người liên hệ ${i + 1}`}
+                onChange={(e) => setContact(i, "phone", e.target.value)}
+              />
+              {contacts.length > 1 && (
+                <button type="button" className="btn btn-sm" aria-label={`Xóa người liên hệ ${i + 1}`} onClick={() => setContacts((cs) => cs.filter((_, j) => j !== i))}>
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          {contacts.length < 5 && (
+            <button type="button" className="text-sm text-primary underline" onClick={() => setContacts((cs) => [...cs, { name: "", phone: "" }])}>
+              + Thêm người liên hệ
+            </button>
+          )}
         </div>
         <Field label="Số thẻ BHYT">
           <input className="input" value={f.insurance_number ?? ""} onChange={(e) => set("insurance_number", e.target.value)} />
@@ -125,4 +155,13 @@ export function MemberForm({
       </div>
     </form>
   );
+}
+
+/** Lưu danh sách liên hệ; người đầu tiên ghi thêm vào cột cũ để tương thích */
+function contactFields(contacts: EmergencyContact[], member?: Member): Partial<Member> {
+  const list = contacts.map((c) => ({ name: c.name.trim(), phone: c.phone.trim() })).filter((c) => c.name || c.phone);
+  const had = !!member && contactsOf(member).length > 0;
+  if (!list.length && !had) return {};
+  const first = list[0];
+  return { emergency_contacts: list, emergency_contact: first?.name || null, emergency_phone: first?.phone || null };
 }

@@ -19,7 +19,7 @@ import { recommendationsFor } from "@/lib/recommendations";
 import { ageInMonths, formatAge, formatDate } from "@/lib/date";
 import { activeMedications, medicationSummary } from "@/lib/medications";
 import { MILESTONE_MAX_AGE } from "@/lib/milestones";
-import { EMPTY_EXTRAS, type Deworming, type Illness, type Measurement, type Member, type MemberExtras, type Vaccination } from "@/lib/types";
+import { contactsOf, EMPTY_EXTRAS, type Deworming, type Illness, type Measurement, type Member, type MemberExtras, type Vaccination } from "@/lib/types";
 
 const ALL_TABS = [
   { key: "overview", label: "Tổng quan" },
@@ -183,7 +183,10 @@ function MemberView() {
             <Info label="Nhóm máu" value={member.blood_type} />
             <Info label="Dị ứng" value={member.allergies} highlight />
             <Info label="Bệnh nền" value={member.chronic_conditions} />
-            <Info label="Liên hệ khẩn cấp" value={[member.emergency_contact, member.emergency_phone].filter(Boolean).join(" – ") || null} />
+            <Info
+              label="Liên hệ khẩn cấp"
+              value={contactsOf(member).map((c) => [c.name, c.phone].filter(Boolean).join(" – ")).join("; ") || null}
+            />
             <Info label="Số thẻ BHYT" value={member.insurance_number ?? null} />
             <Info label="Ghi chú" value={member.notes} />
           </section>

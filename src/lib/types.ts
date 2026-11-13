@@ -25,6 +25,24 @@ export interface Member {
   insurance_number?: string | null;
   emergency_token?: string | null;
   bp_times?: string[]; // giờ nhắc đo huyết áp (migration 0007)
+  emergency_contacts?: EmergencyContact[] | null; // migration 0010
+}
+
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+}
+
+/** Danh sách người liên hệ khẩn cấp (gộp cả kiểu cũ 1 người: emergency_contact/emergency_phone) */
+export function contactsOf(m: {
+  emergency_contacts?: EmergencyContact[] | null;
+  emergency_contact?: string | null;
+  emergency_phone?: string | null;
+}): EmergencyContact[] {
+  const list = (m.emergency_contacts ?? []).filter((c) => c && (c.name?.trim() || c.phone?.trim()));
+  if (list.length) return list;
+  if (m.emergency_contact?.trim() || m.emergency_phone?.trim()) return [{ name: m.emergency_contact ?? "", phone: m.emergency_phone ?? "" }];
+  return [];
 }
 
 export interface Measurement {

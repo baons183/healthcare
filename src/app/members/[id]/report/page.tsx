@@ -15,7 +15,7 @@ import { CHECKUP_META } from "@/lib/checkups";
 import { MILESTONE_BY_CODE, MILESTONE_MAX_AGE } from "@/lib/milestones";
 import { GLUCOSE_CONTEXT, LIPID_KEYS, LIPID_META } from "@/lib/vitals";
 import { activePregnancy, gestationalAge } from "@/lib/pregnancy";
-import { EMPTY_EXTRAS, type Deworming, type Illness, type Measurement, type Member, type MemberExtras, type Vaccination } from "@/lib/types";
+import { contactsOf, EMPTY_EXTRAS, type Deworming, type Illness, type Measurement, type Member, type MemberExtras, type Vaccination } from "@/lib/types";
 
 export default function ReportPage() {
   return (
@@ -111,11 +111,7 @@ function Report() {
         </p>
         <p className={m.allergies ? "font-bold text-danger" : ""}>Dị ứng: {m.allergies || "không ghi nhận"}</p>
         <p>Bệnh nền: {m.chronic_conditions || "không ghi nhận"}</p>
-        {m.emergency_phone && (
-          <p>
-            Liên hệ: {m.emergency_contact} {m.emergency_phone}
-          </p>
-        )}
+        {contactsOf(m).length > 0 && <p>Liên hệ: {contactsOf(m).map((c) => `${c.name} ${c.phone}`.trim()).join("; ")}</p>}
       </header>
 
       {recs.length > 0 && (

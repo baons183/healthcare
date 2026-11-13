@@ -10,7 +10,7 @@ import { ErrorText, Spinner } from "@/components/ui";
 import { getMember, listExtras, setEmergencyLink } from "@/lib/data";
 import { activeMedications } from "@/lib/medications";
 import { formatAge } from "@/lib/date";
-import type { Member } from "@/lib/types";
+import { contactsOf, type Member } from "@/lib/types";
 
 export default function EmergencyPage() {
   return (
@@ -170,7 +170,7 @@ async function makeWallpaper(d: EmergencyData, qrUrl: string): Promise<string> {
   const lines: [string, string, string][] = [];
   if (d.allergies) lines.push(["DỊ ỨNG", d.allergies, "#f07a7a"]);
   if (d.chronic_conditions) lines.push(["BỆNH NỀN", d.chronic_conditions, "#f0efec"]);
-  if (d.emergency_phone) lines.push(["LIÊN HỆ", `${d.emergency_contact ? d.emergency_contact + " " : ""}${d.emergency_phone}`, "#7fb2f0"]);
+  for (const c of contactsOf(d).slice(0, 3)) if (c.phone) lines.push(["LIÊN HỆ", `${c.name ? c.name + " " : ""}${c.phone}`, "#7fb2f0"]);
   y += 40;
   for (const [label, text, color] of lines) {
     y += 80;
