@@ -167,7 +167,7 @@ export function NotificationSettings({ userId }: { userId: string }) {
     ["notify_vaccine", "Lịch tiêm, xổ giun & khám sắp tới", "Báo trước 15 ngày và nhắc lại 1 ngày trước (gồm khám răng, mắt, khám thai)"],
     ["notify_overdue", "Tổng hợp mũi quá hạn", "Vào ngày 1 hàng tháng"],
     ["notify_medication", "Nhắc uống thuốc & đo huyết áp", "Đúng giờ đã đặt trong mục Thuốc và Huyết áp (chỉ thông báo trên thiết bị)"],
-    ["notify_email", "Gửi thêm qua email", `Gộp các nhắc lịch trong ngày thành 1 email lúc ${savedTime}`],
+    ["notify_email", "Gửi thêm qua email", "Gộp các nhắc lịch trong ngày thành 1 email, gửi vào giờ đã đặt ở trên"],
   ];
 
   return (
